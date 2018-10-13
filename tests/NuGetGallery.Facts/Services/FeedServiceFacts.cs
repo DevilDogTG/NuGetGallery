@@ -1,8 +1,6 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -167,7 +165,7 @@ namespace NuGetGallery
                 // Arrange
                 var config = new Mock<IGalleryConfigurationService>();
                 config.Setup(s => s.GetSiteRoot(false)).Returns(siteRoot);
-                var feed = new TestableV1Feed(null, config.Object, null);
+                var feed = new TestableV1Feed(null, config.Object, null, null);
                 feed.Request = new HttpRequestMessage(HttpMethod.Get, siteRoot);
 
                 // Act
@@ -183,7 +181,7 @@ namespace NuGetGallery
                 // Arrange
                 var config = new Mock<IGalleryConfigurationService>();
                 config.Setup(s => s.GetSiteRoot(true)).Returns("https://nuget.org").Verifiable();
-                var feed = new TestableV2Feed(null, config.Object, null);
+                var feed = new TestableV2Feed(null, config.Object, null, null);
                 feed.Request = new HttpRequestMessage(HttpMethod.Get, "https://nuget.org");
 
                 // Act
@@ -228,7 +226,7 @@ namespace NuGetGallery
                     configuration.Setup(c => c.Current).Returns(new AppConfiguration() { IsODataFilterEnabled = false });
                     var searchService = new Mock<ISearchService>(MockBehavior.Strict);
                     searchService.Setup(s => s.ContainsAllVersions).Returns(false);
-                    var v1Service = new TestableV1Feed(repo.Object, configuration.Object, searchService.Object);
+                    var v1Service = new TestableV1Feed(repo.Object, configuration.Object, searchService.Object, null);
                     v1Service.Request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:8081/");
 
                     // Act
@@ -278,7 +276,7 @@ namespace NuGetGallery
                     configuration.Setup(c => c.Current).Returns(new AppConfiguration() { IsODataFilterEnabled = false });
                     var searchService = new Mock<ISearchService>(MockBehavior.Strict);
                     searchService.Setup(s => s.ContainsAllVersions).Returns(false);
-                    var v1Service = new TestableV1Feed(repo.Object, configuration.Object, searchService.Object);
+                    var v1Service = new TestableV1Feed(repo.Object, configuration.Object, searchService.Object, null);
                     v1Service.Request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:8081/");
 
                     // Act
@@ -327,7 +325,7 @@ namespace NuGetGallery
                     var configuration = new Mock<IGalleryConfigurationService>(MockBehavior.Strict);
                     configuration.Setup(c => c.GetSiteRoot(It.IsAny<bool>())).Returns("https://localhost:8081/");
 
-                    var v1Service = new TestableV1Feed(repo.Object, configuration.Object, null);
+                    var v1Service = new TestableV1Feed(repo.Object, configuration.Object, null, null);
                     v1Service.Request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:8081/");
 
                     // Act
@@ -373,7 +371,7 @@ namespace NuGetGallery
                     var configuration = new Mock<IGalleryConfigurationService>(MockBehavior.Strict);
                     configuration.Setup(c => c.GetSiteRoot(It.IsAny<bool>())).Returns("https://localhost:8081/");
 
-                    var v1Service = new TestableV1Feed(repo.Object, configuration.Object, null);
+                    var v1Service = new TestableV1Feed(repo.Object, configuration.Object, null, null);
                     v1Service.Request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:8081/");
 
                     // Act
@@ -427,7 +425,7 @@ namespace NuGetGallery
                     configuration.Setup(c => c.Current).Returns(new AppConfiguration() { IsODataFilterEnabled = true });
                     var searchService = new Mock<ISearchService>(MockBehavior.Strict);
                     searchService.Setup(s => s.ContainsAllVersions).Returns(false);
-                    var v1Service = new TestableV1Feed(repo.Object, configuration.Object, searchService.Object);
+                    var v1Service = new TestableV1Feed(repo.Object, configuration.Object, searchService.Object, null);
                     v1Service.Request = new HttpRequestMessage(HttpMethod.Get, $"{host}{arguments}");
 
                     return v1Service;
@@ -464,7 +462,7 @@ namespace NuGetGallery
                     var searchService = new Mock<ISearchService>(MockBehavior.Strict);
                     searchService.Setup(s => s.ContainsAllVersions).Returns(false);
 
-                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object);
+                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object, null);
                     v2Service.Request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:8081/api/v2/Packages?$filter=" + filter + "&$top=" + top);
 
                     // Act
@@ -504,7 +502,7 @@ namespace NuGetGallery
 
                     string rawUrl = "https://localhost:8081/api/v2/Packages?$filter=" + filter + "&$top=10&$orderby=DownloadCount desc";
 
-                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object);
+                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object, null);
                     v2Service.Request = new HttpRequestMessage(HttpMethod.Get, rawUrl);
                     v2Service.RawUrl = rawUrl;
 
@@ -542,7 +540,7 @@ namespace NuGetGallery
 
                     string rawUrl = "https://localhost:8081/api/v2/Packages?$filter=" + filter + "&$top=10";
 
-                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object);
+                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object, null);
                     v2Service.Request = new HttpRequestMessage(HttpMethod.Get, rawUrl);
                     v2Service.RawUrl = rawUrl;
 
@@ -616,7 +614,7 @@ namespace NuGetGallery
                     var searchService = new Mock<ISearchService>(MockBehavior.Strict);
                     searchService.Setup(s => s.ContainsAllVersions).Returns(false);
 
-                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object);
+                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object, null);
                     v2Service.Request = new HttpRequestMessage(
                         HttpMethod.Get,
                         $"https://localhost:8081/api/v2/Packages(Id=\'{expectedId}\', Version=\'{expectedVersion}\')");
@@ -1385,7 +1383,7 @@ namespace NuGetGallery
                     configuration.Setup(c => c.GetSiteRoot(It.IsAny<bool>())).Returns("https://localhost:8081/");
                     configuration.Setup(c => c.Features).Returns(new FeatureConfiguration() { FriendlyLicenses = true });
                     configuration.Setup(c => c.Current).Returns(new AppConfiguration() { IsODataFilterEnabled = false });
-                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, null);
+                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, null, null);
                     v2Service.Request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:8081/");
 
                     // Act
@@ -1425,7 +1423,7 @@ namespace NuGetGallery
                     configuration.Setup(c => c.GetSiteRoot(It.IsAny<bool>())).Returns("https://localhost:8081/");
                     configuration.Setup(c => c.Features).Returns(new FeatureConfiguration() { FriendlyLicenses = true });
                     configuration.Setup(c => c.Current).Returns(new AppConfiguration() { IsODataFilterEnabled = false });
-                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, null);
+                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, null, null);
                     v2Service.Request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:8081/");
 
                     // Act

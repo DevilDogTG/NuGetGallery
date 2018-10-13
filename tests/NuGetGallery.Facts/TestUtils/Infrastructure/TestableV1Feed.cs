@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Web;
+using Moq;
 using NuGetGallery.Configuration;
 using NuGetGallery.Controllers;
 
@@ -12,8 +13,9 @@ namespace NuGetGallery.TestUtils.Infrastructure
         public TestableV1Feed(
             IEntityRepository<Package> repo,
             IGalleryConfigurationService configuration,
-            ISearchService searchService)
-            : base(repo, configuration, searchService)
+            ISearchService searchService,
+            ITelemetryService telemetryService)
+            : base(repo, configuration, searchService, telemetryService ?? Mock.Of<ITelemetryService>())
         {
         }
 

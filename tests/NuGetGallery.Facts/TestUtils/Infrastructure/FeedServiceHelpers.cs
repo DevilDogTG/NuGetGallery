@@ -177,8 +177,8 @@ namespace NuGetGallery.TestUtils.Infrastructure
             var searchService = new Mock<ISearchService>(MockBehavior.Strict);
             searchService.Setup(s => s.ContainsAllVersions).Returns(false);
 
-            var v1Service = new TestableV1Feed(repo.Object, configuration.Object, searchService.Object);
-            var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object);
+            var v1Service = new TestableV1Feed(repo.Object, configuration.Object, searchService.Object, null);
+            var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object, null);
 
             if (dependencyResolver == null)
             {
