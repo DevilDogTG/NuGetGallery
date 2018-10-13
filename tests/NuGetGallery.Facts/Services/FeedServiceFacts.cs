@@ -576,7 +576,7 @@ namespace NuGetGallery
                     var searchService = new Mock<ISearchService>(MockBehavior.Strict);
                     searchService.Setup(s => s.ContainsAllVersions).Returns(false);
 
-                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object);
+                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object, null);
                     v2Service.Request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:8081/api/v2/Packages/$count?$filter=" + filter + "&$top=" + top);
 
                     // Act
@@ -647,7 +647,7 @@ namespace NuGetGallery
                     var searchService = new Mock<ISearchService>(MockBehavior.Strict);
                     searchService.Setup(s => s.ContainsAllVersions).Returns(false);
 
-                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object);
+                    var v2Service = new TestableV2Feed(repo.Object, configuration.Object, searchService.Object, null);
                     v2Service.Request = new HttpRequestMessage(HttpMethod.Get, "https://localhost:8081/api/v2/Packages(Id='" + expectedId + "', Version='" + expectedVersion + "')");
 
                     // Act
