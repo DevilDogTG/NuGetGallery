@@ -86,6 +86,10 @@ namespace NuGetGallery
                 .AsSelf()
                 .As<IAppConfiguration>();
 
+            builder.Register(c => configuration.Current)
+                .AsSelf()
+                .As<IMessageServiceConfiguration>();
+
             // Force the read of this configuration, so it will be initialized on startup
             builder.Register(c => configuration.Features)
                .AsSelf()

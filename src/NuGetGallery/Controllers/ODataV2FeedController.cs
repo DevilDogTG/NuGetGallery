@@ -35,8 +35,9 @@ namespace NuGetGallery.Controllers
         public ODataV2FeedController(
             IEntityRepository<Package> packagesRepository,
             IGalleryConfigurationService configurationService,
-            ISearchService searchService)
-            : base(configurationService)
+            ISearchService searchService,
+            ITelemetryService telemetryService)
+            : base(configurationService, telemetryService)
         {
             _packagesRepository = packagesRepository;
             _configurationService = configurationService;
@@ -91,8 +92,13 @@ namespace NuGetGallery.Controllers
                                 _configurationService.Features.FriendlyLicenses,
                                 semVerLevelKey);
 
-                        return QueryResult(options, pagedQueryable, MaxPageSize, totalHits, (o, s, resultCount) =>
-                           SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, null, o, s, semVerLevelKey));
+                        return QueryResult(
+                            options,
+                            pagedQueryable,
+                            MaxPageSize,
+                            totalHits,
+                            (o, s, resultCount) => SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, null, o, s, semVerLevelKey),
+                            customQuery: false);
                     }
                 }
             }
@@ -115,7 +121,7 @@ namespace NuGetGallery.Controllers
                 _configurationService.Features.FriendlyLicenses, 
                 semVerLevelKey);
 
-            return QueryResult(options, queryable, MaxPageSize);
+            return QueryResult(options, queryable, MaxPageSize, customQuery: true);
         }
 
         // /api/v2/Packages/$count?semVerLevel=
@@ -168,7 +174,7 @@ namespace NuGetGallery.Controllers
                         _configurationService.Features.FriendlyLicenses, 
                         semVerLevelKey);
 
-                return QueryResult(options, emptyResult, MaxPageSize);
+                return QueryResult(options, emptyResult, MaxPageSize, customQuery: false);
             }
 
             return await GetCore(
@@ -250,8 +256,13 @@ namespace NuGetGallery.Controllers
                             _configurationService.Features.FriendlyLicenses, 
                             semVerLevelKey);
 
-                    return QueryResult(options, pagedQueryable, MaxPageSize, totalHits, (o, s, resultCount) =>
-                       SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { id }, o, s, semVerLevelKey));
+                    return QueryResult(
+                        options,
+                        pagedQueryable,
+                        MaxPageSize,
+                        totalHits,
+                        (o, s, resultCount) => SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { id }, o, s, semVerLevelKey),
+                        customQuery: false);
                 }
             }
             catch (Exception ex)
@@ -271,7 +282,7 @@ namespace NuGetGallery.Controllers
                 _configurationService.Features.FriendlyLicenses, 
                 semVerLevelKey);
 
-            return QueryResult(options, queryable, MaxPageSize);
+            return QueryResult(options, queryable, MaxPageSize, customQuery: true);
         }
 
         // /api/v2/Packages(Id=,Version=)/propertyName
@@ -352,16 +363,22 @@ namespace NuGetGallery.Controllers
                         _configurationService.Features.FriendlyLicenses, 
                         semVerLevelKey);
 
-                return QueryResult(options, pagedQueryable, MaxPageSize, totalHits, (o, s, resultCount) =>
-                {
-                    // The nuget.exe 2.x list command does not like the next link at the bottom when a $top is passed.
-                    // Strip it of for backward compatibility.
-                    if (o.Top == null || (resultCount.HasValue && o.Top.Value >= resultCount.Value))
-                    {
-                        return SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { searchTerm, targetFramework, includePrerelease }, o, s, semVerLevelKey);
-                    }
-                    return null;
-                });
+                return QueryResult(
+                    options,
+                    pagedQueryable,
+                    MaxPageSize,
+                    totalHits,
+                    (o, s, resultCount) =>
+                        {
+                            // The nuget.exe 2.x list command does not like the next link at the bottom when a $top is passed.
+                            // Strip it of for backward compatibility.
+                            if (o.Top == null || (resultCount.HasValue && o.Top.Value >= resultCount.Value))
+                            {
+                                return SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { searchTerm, targetFramework, includePrerelease }, o, s, semVerLevelKey);
+                            }
+                            return null;
+                        },
+                    customQuery: false);
             }
             //Reject only when try to reach database.
             if (!ODataQueryVerifier.AreODataOptionsAllowed(options, ODataQueryVerifier.V2Search,
@@ -376,7 +393,7 @@ namespace NuGetGallery.Controllers
                 _configurationService.Features.FriendlyLicenses, 
                 semVerLevelKey);
 
-            return QueryResult(options, queryable, MaxPageSize);
+            return QueryResult(options, queryable, MaxPageSize, customQuery: true);
         }
 
         // /api/v2/Search()/$count?searchTerm=&targetFramework=&includePrerelease=&semVerLevel=
@@ -482,7 +499,7 @@ namespace NuGetGallery.Controllers
                     _configurationService.Features.FriendlyLicenses, 
                     semVerLevelKey);
 
-            return QueryResult(options, queryable, MaxPageSize);
+            return QueryResult(options, queryable, MaxPageSize, customQuery: false);
         }
 
         // /api/v2/GetUpdates()/$count?packageIds=&versions=&includePrerelease=&includeAllVersions=&targetFrameworks=&versionConstraints=&semVerLevel=

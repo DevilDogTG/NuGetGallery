@@ -23,11 +23,14 @@ namespace NuGetGallery.WebApi
     public class QueryResult<TModel>
         : IHttpActionResult
     {
+        private const string CustomQueryHeader = "X-NuGet-CustomQuery";
+
         private readonly ODataQueryOptions<TModel> _queryOptions;
         private readonly IQueryable<TModel> _queryable;
         private readonly System.Web.Http.ApiController _controller;
         private readonly long? _totalResults;
         private readonly Func<ODataQueryOptions<TModel>, ODataQuerySettings, long?, Uri> _generateNextLink;
+        private readonly bool _customQuery;
         private readonly bool _isPagedResult;
         private readonly int? _semVerLevelKey;
 
@@ -37,20 +40,31 @@ namespace NuGetGallery.WebApi
         public bool FormatAsCountResult { get; set; }
         public bool FormatAsSingleResult { get; set; }
 
-        public QueryResult(ODataQueryOptions<TModel> queryOptions, IQueryable<TModel> queryable, System.Web.Http.ApiController controller, int maxPageSize)
-            : this(queryOptions, queryable, controller, maxPageSize, null, null)
+        public QueryResult(
+            ODataQueryOptions<TModel> queryOptions,
+            IQueryable<TModel> queryable,
+            System.Web.Http.ApiController controller,
+            int maxPageSize,
+            bool customQuery)
+            : this(queryOptions, queryable, controller, maxPageSize, null, null, customQuery)
         {
         }
 
         public QueryResult(
-            ODataQueryOptions<TModel> queryOptions, IQueryable<TModel> queryable, System.Web.Http.ApiController controller, int maxPageSize,
-                long? totalResults, Func<ODataQueryOptions<TModel>, ODataQuerySettings, long?, Uri> generateNextLink)
+            ODataQueryOptions<TModel> queryOptions,
+            IQueryable<TModel> queryable,
+            System.Web.Http.ApiController controller,
+            int maxPageSize,
+            long? totalResults,
+            Func<ODataQueryOptions<TModel>, ODataQuerySettings, long?, Uri> generateNextLink,
+            bool customQuery)
         {
             _queryOptions = queryOptions;
             _queryable = queryable;
             _controller = controller;
             _totalResults = totalResults;
             _generateNextLink = generateNextLink;
+            _customQuery = customQuery;
 
             var queryDictionary = HttpUtility.ParseQueryString(queryOptions.Request.RequestUri.Query);
             _semVerLevelKey = SemVerLevelKey.ForSemVerLevel(queryDictionary["semVerLevel"]);
@@ -75,24 +89,26 @@ namespace NuGetGallery.WebApi
 
         public async Task<HttpResponseMessage> ExecuteAsync(CancellationToken cancellationToken)
         {
+            HttpResponseMessage response;
             try
             {
-                return await GetInnerResult().ExecuteAsync(cancellationToken);
+                response = await GetInnerResult().ExecuteAsync(cancellationToken);
             }
             catch (ODataException e)
             {
-                var response = _controller.Request.CreateErrorResponse(
+                response = _controller.Request.CreateErrorResponse(
                     HttpStatusCode.BadRequest,
                     string.Format(CultureInfo.InvariantCulture, "URI or query string invalid. {0}", e.Message),
                     e);
-
-                return response;
             }
             catch (Exception e)
             {
                 QuietLog.LogHandledException(e);
                 throw;
             }
+
+            response.Headers.Add(CustomQueryHeader, _customQuery ? "true" : "false");
+            return response;
         }
 
         public IHttpActionResult GetInnerResult()

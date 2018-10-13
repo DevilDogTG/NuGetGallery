@@ -56,6 +56,10 @@ namespace NuGetGallery
                         (TrackAction)(s => s.TrackODataQueryFilterEvent("callContext", true, true, "queryPattern"))
                     };
 
+                    yield return new object[] { "ODataCustomQuery",
+                        (TrackAction)(s => s.TrackODataCustomQuery(true))
+                    };
+
                     yield return new object[] { "PackagePush",
                         (TrackAction)(s => s.TrackPackagePushEvent(package, fakes.User, identity))
                     };

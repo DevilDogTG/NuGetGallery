@@ -31,8 +31,9 @@ namespace NuGetGallery.Controllers
             IGalleryConfigurationService configurationService,
             ISearchService searchService,
             ICuratedFeedService curatedFeedService,
-            IEntityRepository<Package> packagesRepository)
-            : base(configurationService)
+            IEntityRepository<Package> packagesRepository,
+            ITelemetryService telemetryService)
+            : base(configurationService, telemetryService)
         {
             _configurationService = configurationService;
             _searchService = searchService;
@@ -67,7 +68,7 @@ namespace NuGetGallery.Controllers
                     semVerLevelKey)
                 .InterceptWith(new NormalizeVersionInterceptor());
 
-            return QueryResult(options, queryable, MaxPageSize);
+            return QueryResult(options, queryable, MaxPageSize, customQuery: true);
         }
 
         // /api/v2/curated-feed/curatedFeedName/Packages/$count?semVerLevel=
@@ -107,7 +108,7 @@ namespace NuGetGallery.Controllers
                 var emptyResult = Enumerable.Empty<Package>().AsQueryable()
                     .ToV2FeedPackageQuery(GetSiteRoot(), _configurationService.Features.FriendlyLicenses, semVerLevelKey);
 
-                return QueryResult(options, emptyResult, MaxPageSize);
+                return QueryResult(options, emptyResult, MaxPageSize, customQuery: false);
             }
 
             return await GetCore(options, curatedFeedName, id, normalizedVersion: null, return404NotFoundWhenNoResults: false, semVerLevel: semVerLevel);
@@ -183,8 +184,13 @@ namespace NuGetGallery.Controllers
                         .Take(options.Top != null ? Math.Min(options.Top.Value, MaxPageSize) : MaxPageSize)
                         .ToV2FeedPackageQuery(GetSiteRoot(), _configurationService.Features.FriendlyLicenses, semVerLevelKey);
 
-                    return QueryResult(options, pagedQueryable, MaxPageSize, totalHits, (o, s, resultCount) =>
-                       SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { id }, o, s, semVerLevelKey));
+                    return QueryResult(
+                        options,
+                        pagedQueryable,
+                        MaxPageSize,
+                        totalHits,
+                        (o, s, resultCount) => SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { id }, o, s, semVerLevelKey),
+                        customQuery: false);
                 }
             }
             catch (Exception ex)
@@ -204,7 +210,7 @@ namespace NuGetGallery.Controllers
                 _configurationService.Features.FriendlyLicenses, 
                 semVerLevelKey);
 
-            return QueryResult(options, queryable, MaxPageSize);
+            return QueryResult(options, queryable, MaxPageSize, customQuery: true);
         }
 
         // /api/v2/curated-feed/curatedFeedName/Packages(Id=,Version=)/propertyName
@@ -290,22 +296,28 @@ namespace NuGetGallery.Controllers
                         _configurationService.Features.FriendlyLicenses, 
                         semVerLevelKey);
 
-                return QueryResult(options, pagedQueryable, MaxPageSize, totalHits, (o, s, resultCount) =>
-                {
-                    // The nuget.exe 2.x list command does not like the next link at the bottom when a $top is passed.
-                    // Strip it of for backward compatibility.
-                    if (o.Top == null || (resultCount.HasValue && o.Top.Value >= resultCount.Value))
+                return QueryResult(
+                    options,
+                    pagedQueryable,
+                    MaxPageSize,
+                    totalHits,
+                    (o, s, resultCount) =>
                     {
-                        return SearchAdaptor.GetNextLink(
-                            Request.RequestUri, 
-                            resultCount, 
-                            new { searchTerm, targetFramework, includePrerelease }, 
-                            o, 
-                            s,
-                            semVerLevelKey);
-                    }
-                    return null;
-                });
+                        // The nuget.exe 2.x list command does not like the next link at the bottom when a $top is passed.
+                        // Strip it of for backward compatibility.
+                        if (o.Top == null || (resultCount.HasValue && o.Top.Value >= resultCount.Value))
+                        {
+                            return SearchAdaptor.GetNextLink(
+                                Request.RequestUri, 
+                                resultCount, 
+                                new { searchTerm, targetFramework, includePrerelease }, 
+                                o, 
+                                s,
+                                semVerLevelKey);
+                        }
+                        return null;
+                    },
+                    customQuery: false);
             }
 
             // If not, just let OData handle things
@@ -314,7 +326,7 @@ namespace NuGetGallery.Controllers
                 _configurationService.Features.FriendlyLicenses, 
                 semVerLevelKey);
 
-            return QueryResult(options, queryable, MaxPageSize);
+            return QueryResult(options, queryable, MaxPageSize, customQuery: true);
         }
 
         // /api/v2/curated-feed/curatedFeedName/Search()/$count?searchTerm=&targetFramework=&includePrerelease=
