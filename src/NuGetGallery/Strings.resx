@@ -491,7 +491,7 @@ For more information, please contact '{2}'.</value>
     <value>This package will only be available to download with SemVer 2.0.0 compatible NuGet clients, such as Visual Studio 2017 (version 15.3) and above or NuGet client 4.3 and above. For more information, see https://go.microsoft.com/fwlink/?linkid=852248.</value>
   </data>
   <data name="ReservedNamespace_InvalidCharactersInNamespace" xml:space="preserve">
-    <value>The namespace '{0}' contains invalid characters. Examples of valid namespaces include 'MyNamespace' and 'MyNamespace.'.</value>
+    <value>The namespace '{0}' contains invalid characters. Examples of valid namespaces include 'MyNamespace', 'MyNamespace.' or 'MyNamespace-' etc.</value>
   </data>
   <data name="ReservedNamespace_InvalidNamespace" xml:space="preserve">
     <value>Invalid namespace specified</value>
@@ -566,13 +566,13 @@ For more information, please contact '{2}'.</value>
     <value>Organization accounts cannot create credentials.</value>
   </data>
   <data name="AccountDelete_AccountAlreadyDeleted" xml:space="preserve">
-    <value>The account:{0} was already deleted. No action was performed.</value>
+    <value>The account '{0}' was already deleted. No action was performed.</value>
   </data>
   <data name="AccountDelete_Fail" xml:space="preserve">
-    <value>An exception was encoutered while trying to delete the account:{0}. {1}</value>
+    <value>An exception was encountered while trying to delete the account '{0}': {1}</value>
   </data>
   <data name="AccountDelete_Success" xml:space="preserve">
-    <value>The account:{0} was deleted succesfully.</value>
+    <value>The account '{0}' was deleted succesfully.</value>
   </data>
   <data name="AccountDelete_CreateSupportRequestFails" xml:space="preserve">
     <value>The request failed to be submitted. Please try again or contact support.</value>
@@ -697,7 +697,7 @@ For more information, please contact '{2}'.</value>
 If you would like to update the linked Microsoft account you can do so from the account settings page.</value>
   </data>
   <data name="ChangeCredential_Failed" xml:space="preserve">
-    <value>Failed to update the Microsoft account with '{0}'. This could happen if it is already linked to another NuGet account. Contact support for more information.</value>
+    <value>Failed to update the Microsoft account with '{0}'. This could happen if it is already linked to another NuGet account. See {1} for more details.</value>
   </data>
   <data name="ChangeCredential_NotAllowed" xml:space="preserve">
     <value>The change of Azure active directory account is not allowed by your organization(s): {0}. Please leave these organization(s) to change your login.</value>
@@ -981,7 +981,7 @@ Click the following link within the next hour to reset your password:
 
 [{0}]({0})
 
-Note that NuGet.org password login is deprecated. Please use Microsoft account to sign into {1}.
+Note that NuGet.org password login is no longer supported. Please use Microsoft account to sign into {1}.
 
 Thanks,
 The {1} Team</value>
@@ -994,12 +994,134 @@ Click the following link within the next hour to set your password:
 
 [{0}]({0})
 
-Note that NuGet.org password login is deprecated. Please use Microsoft account to sign into {1}.
+Note that NuGet.org password login is no longer supported. Please use Microsoft account to sign into {1}.
 
 Thanks,
 The {1} Team</value>
   </data>
   <data name="UploadPackage_NotAcceptingPackagesWithLicense" xml:space="preserve">
     <value>This package contains a &lt;license&gt; metadata which is currently not supported.</value>
+  </data>
+  <data name="AuthenticationFailure_UnkownError" xml:space="preserve">
+    <value>Unknown error!</value>
+  </data>
+  <data name="UploadPackage_DeprecatingLicenseUrl" xml:space="preserve">
+    <value>&lt;licenseUrl&gt; element will be deprecated, please consider switching to specifying the license in the package.</value>
+  </data>
+  <data name="UploadPackage_DeprecationUrlUsage" xml:space="preserve">
+    <value>The license deprecation URL must be used in conjunction with specifying the license in the package.</value>
+  </data>
+  <data name="UploadPackage_InvalidLicenseMetadata" xml:space="preserve">
+    <value>Invalid license metadata: {0}</value>
+    <comment>{0} is the list of the issues found with license expression.</comment>
+  </data>
+  <data name="UploadPackage_LegacyLicenseUrlNotAllowed" xml:space="preserve">
+    <value>Specifying &lt;licenseUrl&gt; in the package metadata is no longer allowed, please specify the license in the package.</value>
+  </data>
+  <data name="UploadPackage_MissingLicenseInformation" xml:space="preserve">
+    <value>The package has no license information specified.</value>
+  </data>
+  <data name="UploadPackage_InvalidLicenseFileExtension" xml:space="preserve">
+    <value>The license file has invalid extension '{0}'. Extension must be either empty or one of the following: {1}.</value>
+    <comment>{0} is the specified extension. {1} is the string containing the allowed non-empty extensions list</comment>
+  </data>
+  <data name="UploadPackage_LicenseFileDoesNotExist" xml:space="preserve">
+    <value>The license file '{0}' does not exist in the package.</value>
+    <comment>{0} is the license file name specified in the .nuspec</comment>
+  </data>
+  <data name="UploadPackage_LicenseMustBePlainText" xml:space="preserve">
+    <value>The license file must be plain text using UTF-8 encoding.</value>
+  </data>
+  <data name="UploadPackage_LicenseFileTooLong" xml:space="preserve">
+    <value>The license file cannot be longer than {0}.</value>
+    <comment>{0} is the string representation max allowed license file size (in whatever units the caller choses)</comment>
+  </data>
+  <data name="UploadPackage_LicenseNodeContainsChildren" xml:space="preserve">
+    <value>The license node cannot contain child nodes.</value>
+  </data>
+  <data name="UploadPackage_LicenseNodeValueTooLong" xml:space="preserve">
+    <value>The license node value must be shorter than 500 characters.</value>
+  </data>
+  <data name="UploadPackage_UnsupportedLicenseVersion" xml:space="preserve">
+    <value>Unsupported license version '{0}'. The only supported license version is 1.0.0.</value>
+    <comment>{0} is the license version text from nuspec</comment>
+  </data>
+  <data name="UploadPackage_CorruptNupkg" xml:space="preserve">
+    <value>The package file is corrupt.</value>
+  </data>
+  <data name="UploadPackage_UnsupportedLicenseType" xml:space="preserve">
+    <value>Unsupported license type '{0}'.</value>
+    <comment>{0} is the license type read from the nuspec</comment>
+  </data>
+  <data name="UploadPackage_DeprecationUrlRequiredForLicenseExpressions" xml:space="preserve">
+    <value>To provide a better experience for older clients when a license expression is specified, &lt;licenseUrl&gt; must be set to '{0}'.</value>
+    <comment>{0} is the licenses.nuget.org link with license expression</comment>
+  </data>
+  <data name="UploadPackage_DeprecationUrlRequiredForLicenseFiles" xml:space="preserve">
+    <value>To provide a better experience for older clients when a license file is packaged, &lt;licenseUrl&gt; must be set to '{0}'.</value>
+    <comment>{0} is the deprecation page URL</comment>
+  </data>
+  <data name="UploadPackage_LearnMore" xml:space="preserve">
+    <value>Learn more</value>
+  </data>
+  <data name="UploadPackage_LicenseShouldBeSpecified" xml:space="preserve">
+    <value>All published packages should have license information specified.</value>
+  </data>
+  <data name="UploadPackage_NonFsfOrOsiLicense" xml:space="preserve">
+    <value>License expression must only contain licenses that are approved by Open Source Initiative or Free Software Foundation. Unsupported licenses: {0}.</value>
+    <comment>{0} is list of the package license ids that are neither OSI nor FSF approved</comment>
+  </data>
+  <data name="UploadPackage_MalformedLicenseUrl" xml:space="preserve">
+    <value>The package contains a malformed license URL.</value>
+  </data>
+  <data name="SecurityPolicy_PackageAuthorNotAllowed" xml:space="preserve">
+    <value>The package metadata defines '{0}' as one of the authors which is not allowed by policy.</value>
+    <comment>{0} is the author that is not in the list of allowed authors for this policy.</comment>
+  </data>
+  <data name="SecurityPolicy_PackageAuthorDuplicatesNotAllowed" xml:space="preserve">
+    <value>The package metadata defines '{0}' as author more than once, which is not allowed by policy.</value>
+    <comment>{0} is the list of duplicate package authors</comment>
+  </data>
+  <data name="UploadPackage_SymbolsPackageNotAllowed" xml:space="preserve">
+    <value>Snupkg upload failed. Please use latest NuGet clients (v 4.9.0 or above) and a V3 endpoint to push Symbol packages. For details, refer https://docs.microsoft.com/nuget/create-packages/symbol-packages-snupkg</value>
+  </data>
+  <data name="SearchServiceIsNotAvailable" xml:space="preserve">
+    <value>Search Service is not available. Please try again later.</value>
+  </data>
+  <data name="DeprecatePackage_MissingVersion" xml:space="preserve">
+    <value>At least one version of package '{0}' specified could not be found.</value>
+  </data>
+  <data name="DeprecatePackage_NoAlternatePackage" xml:space="preserve">
+    <value>Alternate package '{0} {1}' does not exist.</value>
+  </data>
+  <data name="DeprecatePackage_NoAlternatePackageRegistration" xml:space="preserve">
+    <value>Alternate package '{0}' does not exist.</value>
+  </data>
+  <data name="DeprecatePackage_NoVersions" xml:space="preserve">
+    <value>You must select at least one version to deprecate!</value>
+  </data>
+  <data name="DeprecatePackage_Forbidden" xml:space="preserve">
+    <value>You do not have permission to deprecate this package.</value>
+  </data>
+  <data name="DeprecatePackage_Locked" xml:space="preserve">
+    <value>Package '{0}' is locked and cannot have its deprecation changed.</value>
+  </data>
+  <data name="DeprecatePackage_MissingRegistration" xml:space="preserve">
+    <value>Package '{0}' could not be found.</value>
+  </data>
+  <data name="DeprecatePackage_CustomMessageRequired" xml:space="preserve">
+    <value>You must add a custom message if you are deprecating a package due to another reason!</value>
+  </data>
+  <data name="SymbolsPackage_NoSymbols" xml:space="preserve">
+    <value>The package does not contain any symbol (.pdb) files.</value>
+  </data>
+  <data name="UploadPackage_EmbeddedIconNotAccepted" xml:space="preserve">
+    <value>The &lt;icon&gt; element is not currently supported.</value>
+  </data>
+  <data name="DeprecatePackage_CustomMessageTooLong" xml:space="preserve">
+    <value>Your custom message is too long. It must be under {0} characters.</value>
+  </data>
+  <data name="DeprecatePackage_AlternateOfSelf" xml:space="preserve">
+    <value>A package cannot be the alternate package of itself.</value>
   </data>
 </root>

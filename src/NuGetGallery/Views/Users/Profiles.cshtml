@@ -12,7 +12,7 @@
 <section role="main" class="container main-container page-profile">
     <div class="row">
         <aside class="col-md-3 col-md-push-9 profile-details">
-            @ViewHelpers.GravatarImage(Model.EmailAddress ?? Model.UnconfirmedEmailAddress, Model.Username, Constants.GravatarImageSizeLarge, responsive: true)
+            @ViewHelpers.GravatarImage(Model.EmailAddress ?? Model.UnconfirmedEmailAddress, Model.Username, GalleryConstants.GravatarImageSizeLarge, responsive: true)
             <div class="statistics">
                 <div class="statistic">
                     <div class="value">@Model.AllPackages.Count.ToNuGetNumberString()</div>
@@ -23,6 +23,20 @@
                     <div class="description">Total @(Model.TotalPackageDownloadCount == 1 ? "download" : "downloads") of packages</div>
                 </div>
             </div>
+            @if (User.IsAdministrator())
+            {
+                <div class="additional-info">
+                    <dl>
+                        <dt>Email Address:</dt>
+                        <dd>@Model.EmailAddress</dd>
+                        @if (Model.UnconfirmedEmailAddress != null)
+                        {
+                            <dt>Unconfirmed Email Address:</dt>
+                            <dd>@Model.UnconfirmedEmailAddress</dd>
+                        }
+                    </dl>
+                </div>
+            }
         </aside>
         <article class="col-md-9 col-md-pull-3">
             <div class="profile-title">
@@ -32,9 +46,10 @@
                     {
                         <a href="@(Model.UserIsOrganization ? Url.ManageMyOrganization(Model.Username) : Url.AccountSettings())" aria-label="Manage this account"><i class="ms-Icon ms-Icon--Edit ms-font-xl"></i></a>
                     }
-                    @if (User.IsAdministrator() && !Model.UserIsOrganization)
+                    @if (User.IsAdministrator())
                     {
-                        <a href="@Url.AdminDeleteAccount(@Model.Username)" aria-label="Delete this account"><i class="ms-Icon ms-Icon--Delete ms-font-xl"></i></a>
+                        var deleteUrl = Model.UserIsOrganization ? Url.AdminDeleteOrganization(Model.Username) : Url.AdminDeleteAccount(Model.Username);
+                        <a href="@deleteUrl" aria-label="Delete this account"><i class="ms-Icon ms-Icon--Delete ms-font-xl" aria-hidden="true"></i></a>
                     }
                 </h1>
                 <span>

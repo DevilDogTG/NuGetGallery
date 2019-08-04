@@ -10,6 +10,7 @@ using Moq;
 using NuGetGallery.Security;
 using NuGetGallery.Areas.Admin.ViewModels;
 using Xunit;
+using NuGet.Services.Entities;
 
 namespace NuGetGallery.Areas.Admin.Controllers
 {
@@ -185,6 +186,30 @@ namespace NuGetGallery.Areas.Admin.Controllers
             Assert.False(policyService.IsSubscribed(users[2], subscription));
 
             policyService.MockEntitiesContext.Verify(c => c.SaveChangesAsync(), Times.Exactly(2));
+        }
+
+        [Fact]
+        public void IsSubscribedIgnoresPolicyState()
+        {
+            // Arrange.
+            var users = TestUsers.ToList();
+            var policyService = new TestSecurityPolicyService();
+            var entitiesMock = policyService.MockEntitiesContext;
+            entitiesMock.Setup(c => c.Users).Returns(users.MockDbSet().Object);
+            var controller = new SecurityPolicyController(entitiesMock.Object, policyService);
+            var subscription = policyService.Mocks.UserPoliciesSubscription.Object;
+
+            users.ForEach(async u => await policyService.SubscribeAsync(u, subscription));
+            policyService.MockEntitiesContext.ResetCalls();
+
+            // Act.
+            // Simulates changes to the configurable state of all existing policy subscriptions
+            users.ForEach(u => 
+                u.SecurityPolicies.Where(p => p.Subscription == subscription.SubscriptionName).ToList().ForEach(p => 
+                    p.Value = Guid.NewGuid().ToString()));
+
+            // Assert.
+            Assert.All(users, u => Assert.True(policyService.IsSubscribed(u, subscription)));
         }
 
         [Fact]

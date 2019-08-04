@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using NuGet.Services.Entities;
 using NuGet.Versioning;
 
 namespace NuGetGallery
@@ -9,7 +10,6 @@ namespace NuGetGallery
     public class PackageViewModel : IPackageVersionModel
     {
         protected readonly Package _package;
-        private string _pendingTitle;
 
         private readonly PackageStatus _packageStatus;
         internal readonly NuGetVersion NuGetVersion;
@@ -18,7 +18,7 @@ namespace NuGetGallery
         {
             _package = package ?? throw new ArgumentNullException(nameof(package));
 
-            FullVersion = NuGetVersionFormatter.ToFullStringOrFallback(package.Version, fallback: package.Version);
+            FullVersion = NuGetVersionFormatter.ToFullString(package.Version);
             IsSemVer2 = package.SemVerLevelKey == SemVerLevelKey.SemVer2;
 
             Version = String.IsNullOrEmpty(package.NormalizedVersion) ?
@@ -34,6 +34,7 @@ namespace NuGetGallery
             LatestVersionSemVer2 = package.IsLatestSemVer2;
             LatestStableVersion = package.IsLatestStable;
             LatestStableVersionSemVer2 = package.IsLatestStableSemVer2;
+            DevelopmentDependency = package.DevelopmentDependency;
             LastUpdated = package.Published;
             Listed = package.Listed;
             _packageStatus = package.PackageStatusKey;
@@ -49,6 +50,7 @@ namespace NuGetGallery
         public bool LatestStableVersion { get; set; }
         public bool LatestVersionSemVer2 { get; set; }
         public bool LatestStableVersionSemVer2 { get; set; }
+        public bool DevelopmentDependency { get; set; }
         public bool Prerelease { get; set; }
         public int DownloadCount { get; set; }
         public bool Listed { get; set; }
@@ -70,13 +72,6 @@ namespace NuGetGallery
         public string Version { get; set; }
         public string FullVersion { get; }
         public bool IsSemVer2 { get; }
-
-        public string Title
-        {
-            get { return _pendingTitle ?? (String.IsNullOrEmpty(_package.Title) ? _package.PackageRegistration.Id : _package.Title); }
-            set { _pendingTitle = value; }
-        }
-
         public bool IsCurrent(IPackageVersionModel current)
         {
             return current.Version == Version && current.Id == Id;

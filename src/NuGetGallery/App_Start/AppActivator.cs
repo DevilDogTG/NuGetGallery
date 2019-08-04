@@ -17,12 +17,13 @@ using System.Web.UI;
 using Elmah;
 using Microsoft.WindowsAzure.Diagnostics;
 using Microsoft.WindowsAzure.ServiceRuntime;
-using NuGet.Services.Search.Client.Correlation;
 using NuGetGallery;
 using NuGetGallery.Configuration;
 using NuGetGallery.Diagnostics;
 using NuGetGallery.Infrastructure;
 using NuGetGallery.Infrastructure.Jobs;
+using NuGetGallery.Infrastructure.Lucene;
+using NuGetGallery.Infrastructure.Search.Correlation;
 using WebActivatorEx;
 using WebBackgrounder;
 
@@ -140,7 +141,7 @@ namespace NuGetGallery
             BundleTable.Bundles.Add(newStyleBundle);
 
             var scriptBundle = new ScriptBundle("~/Scripts/gallery/site.min.js")
-                .Include("~/Scripts/gallery/jquery-1.12.4.js")
+                .Include("~/Scripts/gallery/jquery-3.4.1.js")
                 .Include("~/Scripts/gallery/jquery.validate-1.16.0.js")
                 .Include("~/Scripts/gallery/jquery.validate.unobtrusive-3.2.6.js")
                 .Include("~/Scripts/gallery/knockout-3.4.2.js")
@@ -155,6 +156,10 @@ namespace NuGetGallery
                 .Include("~/Scripts/gallery/stats-perpackagestatsgraphs.js")
                 .Include("~/Scripts/gallery/stats-dimensions.js");
             BundleTable.Bundles.Add(d3ScriptBundle);
+
+            var multiSelectDropdownBundle = new ScriptBundle("~/Scripts/gallery/common-multi-select-dropdown.min.js")
+                .Include("~/Scripts/gallery/common-multi-select-dropdown.js");
+            BundleTable.Bundles.Add(multiSelectDropdownBundle);
 
             var homeScriptBundle = new ScriptBundle("~/Scripts/gallery/page-home.min.js")
                 .Include("~/Scripts/gallery/page-home.js");
@@ -176,6 +181,18 @@ namespace NuGetGallery
             var manageOwnersScriptBundle = new ScriptBundle("~/Scripts/gallery/page-manage-owners.min.js")
                 .Include("~/Scripts/gallery/page-manage-owners.js");
             BundleTable.Bundles.Add(manageOwnersScriptBundle);
+
+            var manageDeprecationScriptBundle = new ScriptBundle("~/Scripts/gallery/page-manage-deprecation.min.js")
+                .Include("~/Scripts/gallery/page-manage-deprecation.js");
+            BundleTable.Bundles.Add(manageDeprecationScriptBundle);
+
+            var deletePackageScriptBundle = new ScriptBundle("~/Scripts/gallery/page-delete-package.min.js")
+                .Include("~/Scripts/gallery/page-delete-package.js");
+            BundleTable.Bundles.Add(deletePackageScriptBundle);
+
+            var editReadMeScriptBundle = new ScriptBundle("~/Scripts/gallery/page-edit-readme.min.js")
+                .Include("~/Scripts/gallery/page-edit-readme.js");
+            BundleTable.Bundles.Add(editReadMeScriptBundle);
 
             var aboutScriptBundle = new ScriptBundle("~/Scripts/gallery/page-about.min.js")
                 .Include("~/Scripts/gallery/page-about.js");
@@ -240,11 +257,11 @@ namespace NuGetGallery
 
         private static void BackgroundJobsPostStart(IAppConfiguration configuration)
         {
-            var indexer = DependencyResolver.Current.GetService<IIndexingService>();
+            var indexingJobFactory = DependencyResolver.Current.GetService<IIndexingJobFactory>();
             var jobs = new List<IJob>();
-            if (indexer != null)
+            if (indexingJobFactory != null)
             {
-                indexer.RegisterBackgroundJobs(jobs, configuration);
+                indexingJobFactory.RegisterBackgroundJobs(jobs, configuration);
             }
 
             if (configuration.CollectPerfLogs)

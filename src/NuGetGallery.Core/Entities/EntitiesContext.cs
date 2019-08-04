@@ -1,34 +1,44 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Common;
 using System.Data.Entity;
+using System.Data.Entity.Infrastructure;
 using System.Data.Entity.Infrastructure.Annotations;
 using System.Threading.Tasks;
+using NuGet.Services.Entities;
 
 namespace NuGetGallery
 {
+    /// <summary>
+    /// This GalleryDbContextFactory is provided for running migrations in a flexible way as follows:
+    /// 1. Run migration using DbConnection; (For DatabaseMigrationTools with AAD token)
+    /// 2. Run migration using connection string;
+    /// 3. Run migration using default connection string ("Gallery.SqlServer") in a web.config; (For command-line migration with integrated AAD/username+password)
+    /// </summary>
+    public class GalleryDbContextFactory : IDbContextFactory<EntitiesContext>
+    {
+        public static Func<EntitiesContext> GalleryEntitiesContextFactory;
+        public EntitiesContext Create()
+        {
+            var factory = GalleryEntitiesContextFactory;
+            return factory == null ? new EntitiesContext("Gallery.SqlServer", readOnly: false) : factory();
+        }
+    }
+
     [DbConfigurationType(typeof(EntitiesConfiguration))]
     public class EntitiesContext
         : ObjectMaterializedInterceptingDbContext, IEntitiesContext
     {
         private const string CertificatesThumbprintIndex = "IX_Certificates_Thumbprint";
+        private const string UserSecurityPolicyUserKeyNameSubscriptionIndex = "IX_UserSecurityPolicy_UserKeyNameSubscription";
 
         static EntitiesContext()
         {
             // Don't run migrations, ever!
             Database.SetInitializer<EntitiesContext>(null);
-        }
-
-        /// <summary>
-        /// This constructor is provided mainly for purposes of running migrations from Package Manager console,
-        /// or any other scenario where a connection string will be set after the EntitiesContext is created
-        /// (and read only mode is don't care).
-        /// </summary>
-        public EntitiesContext()
-            : this("Gallery.SqlServer", false) // Use the connection string in a web.config (if one is found)
-        {
         }
 
         /// <summary>
@@ -43,27 +53,27 @@ namespace NuGetGallery
         public EntitiesContext(DbConnection connection, bool readOnly)
             : base(connection, contextOwnsConnection: true)
         {
-            ReadOnly = readOnly;
+           ReadOnly = readOnly;
         }
 
         public bool ReadOnly { get; private set; }
-        public IDbSet<CuratedFeed> CuratedFeeds { get; set; }
-        public IDbSet<CuratedPackage> CuratedPackages { get; set; }
-        public IDbSet<PackageRegistration> PackageRegistrations { get; set; }
-        public IDbSet<Credential> Credentials { get; set; }
-        public IDbSet<Scope> Scopes { get; set; }
-        public IDbSet<UserSecurityPolicy> UserSecurityPolicies { get; set; }
-        public IDbSet<ReservedNamespace> ReservedNamespaces { get; set; }
-        public IDbSet<Certificate> Certificates { get; set; }
-        public IDbSet<UserCertificate> UserCertificates { get; set; }
-        public IDbSet<SymbolPackage> SymbolPackages { get; set; }
+        public DbSet<Package> Packages { get; set; }
+        public DbSet<PackageDeprecation> Deprecations { get; set; }
+        public DbSet<PackageRegistration> PackageRegistrations { get; set; }
+        public DbSet<Credential> Credentials { get; set; }
+        public DbSet<Scope> Scopes { get; set; }
+        public DbSet<UserSecurityPolicy> UserSecurityPolicies { get; set; }
+        public DbSet<ReservedNamespace> ReservedNamespaces { get; set; }
+        public DbSet<Certificate> Certificates { get; set; }
+        public DbSet<UserCertificate> UserCertificates { get; set; }
+        public DbSet<SymbolPackage> SymbolPackages { get; set; }
 
         /// <summary>
         /// User or organization accounts.
         /// </summary>
-        public IDbSet<User> Users { get; set; }
+        public DbSet<User> Users { get; set; }
 
-        IDbSet<T> IEntitiesContext.Set<T>()
+        DbSet<T> IReadOnlyEntitiesContext.Set<T>()
         {
             return base.Set<T>();
         }
@@ -218,6 +228,50 @@ namespace NuGetGallery
             modelBuilder.Entity<UserSecurityPolicy>()
                 .HasKey(p => p.Key);
 
+            modelBuilder.Entity<UserSecurityPolicy>()
+                .Property(e => e.UserKey)
+                .IsRequired()
+                .HasColumnAnnotation(
+                    IndexAnnotation.AnnotationName,
+                    new IndexAnnotation(new[]
+                    {
+                        new IndexAttribute(UserSecurityPolicyUserKeyNameSubscriptionIndex, order: 0)
+                        {
+                            IsUnique = true
+                        }
+                    })
+                );
+
+            modelBuilder.Entity<UserSecurityPolicy>()
+               .Property(e => e.Name)
+               .HasMaxLength(256)
+               .IsRequired()
+               .HasColumnAnnotation(
+                   IndexAnnotation.AnnotationName,
+                   new IndexAnnotation(new[]
+                   {
+                        new IndexAttribute(UserSecurityPolicyUserKeyNameSubscriptionIndex, order: 1)
+                        {
+                            IsUnique = true
+                        }
+                   })
+               );
+
+            modelBuilder.Entity<UserSecurityPolicy>()
+               .Property(e => e.Subscription)
+               .HasMaxLength(256)
+               .IsRequired()
+               .HasColumnAnnotation(
+                   IndexAnnotation.AnnotationName,
+                   new IndexAnnotation(new[]
+                   {
+                        new IndexAttribute(UserSecurityPolicyUserKeyNameSubscriptionIndex, order: 2)
+                        {
+                            IsUnique = true
+                        }
+                   })
+               );
+
             modelBuilder.Entity<EmailMessage>()
                 .HasKey(em => em.Key);
 
@@ -299,27 +353,6 @@ namespace NuGetGallery
             modelBuilder.Entity<PackageFramework>()
                 .HasKey(pf => pf.Key);
 
-            modelBuilder.Entity<CuratedFeed>()
-                .HasKey(cf => cf.Key);
-
-            modelBuilder.Entity<CuratedFeed>()
-                .HasMany<CuratedPackage>(cf => cf.Packages)
-                .WithRequired(cp => cp.CuratedFeed)
-                .HasForeignKey(cp => cp.CuratedFeedKey);
-
-            modelBuilder.Entity<CuratedFeed>()
-                .HasMany<User>(cf => cf.Managers)
-                .WithMany()
-                .Map(c => c.ToTable("CuratedFeedManagers")
-                           .MapLeftKey("CuratedFeedKey")
-                           .MapRightKey("UserKey"));
-
-            modelBuilder.Entity<CuratedPackage>()
-                .HasKey(cp => cp.Key);
-
-            modelBuilder.Entity<CuratedPackage>()
-                .HasRequired(cp => cp.PackageRegistration);
-
             modelBuilder.Entity<PackageDelete>()
                 .HasKey(pd => pd.Key)
                 .HasMany(pd => pd.Packages)
@@ -330,7 +363,7 @@ namespace NuGetGallery
                 .HasRequired(a => a.DeletedAccount);
 
             modelBuilder.Entity<AccountDelete>()
-                .HasRequired(a => a.DeletedBy)
+                .HasOptional(a => a.DeletedBy)
                 .WithMany()
                 .WillCascadeOnDelete(false);
 
@@ -389,6 +422,33 @@ namespace NuGetGallery
             modelBuilder.Entity<SymbolPackage>()
                 .Property(s => s.RowVersion)
                 .IsRowVersion();
+
+            modelBuilder.Entity<PackageDeprecation>()
+                .HasKey(d => d.Key);
+
+            modelBuilder.Entity<Package>()
+                .HasMany(p => p.Deprecations)
+                .WithRequired(d => d.Package)
+                .HasForeignKey(d => d.PackageKey)
+                .WillCascadeOnDelete(true);
+
+            modelBuilder.Entity<Package>()
+                .HasMany(p => p.AlternativeOf)
+                .WithOptional(d => d.AlternatePackage)
+                .HasForeignKey(d => d.AlternatePackageKey)
+                .WillCascadeOnDelete(false);
+
+            modelBuilder.Entity<PackageRegistration>()
+                .HasMany(p => p.AlternativeOf)
+                .WithOptional(d => d.AlternatePackageRegistration)
+                .HasForeignKey(d => d.AlternatePackageRegistrationKey)
+                .WillCascadeOnDelete(false);
+
+            modelBuilder.Entity<PackageDeprecation>()
+                .HasOptional(d => d.DeprecatedByUser)
+                .WithMany()
+                .HasForeignKey(d => d.DeprecatedByUserKey)
+                .WillCascadeOnDelete(false);
         }
 #pragma warning restore 618
     }

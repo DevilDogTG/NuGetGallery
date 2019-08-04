@@ -6,6 +6,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web.Mvc;
+using NuGet.Services.Entities;
 
 namespace NuGetGallery
 {
@@ -26,14 +27,14 @@ namespace NuGetGallery
 
         public Task<ActionResult> CreateDownloadPackageActionResultAsync(Uri requestUrl, Package package)
         {
-            var fileName = BuildFileName(package, CoreConstants.PackageFileSavePathTemplate, CoreConstants.NuGetPackageFileExtension);
-            return _fileStorageService.CreateDownloadFileActionResultAsync(requestUrl, CoreConstants.PackagesFolderName, fileName);
+            var fileName = FileNameHelper.BuildFileName(package, CoreConstants.PackageFileSavePathTemplate, CoreConstants.NuGetPackageFileExtension);
+            return _fileStorageService.CreateDownloadFileActionResultAsync(requestUrl, CoreConstants.Folders.PackagesFolderName, fileName);
         }
 
         public Task<ActionResult> CreateDownloadPackageActionResultAsync(Uri requestUrl, string id, string version)
         {
-            var fileName = BuildFileName(id, version, CoreConstants.PackageFileSavePathTemplate, CoreConstants.NuGetPackageFileExtension);
-            return _fileStorageService.CreateDownloadFileActionResultAsync(requestUrl, CoreConstants.PackagesFolderName, fileName);
+            var fileName = FileNameHelper.BuildFileName(id, version, CoreConstants.PackageFileSavePathTemplate, CoreConstants.NuGetPackageFileExtension);
+            return _fileStorageService.CreateDownloadFileActionResultAsync(requestUrl, CoreConstants.Folders.PackagesFolderName, fileName);
         }
 
         /// <summary>
@@ -47,9 +48,9 @@ namespace NuGetGallery
                 throw new ArgumentNullException(nameof(package));
             }
             
-            var fileName = BuildFileName(package, ReadMeFilePathTemplateActive, Constants.MarkdownFileExtension);
+            var fileName = FileNameHelper.BuildFileName(package, ReadMeFilePathTemplateActive, ServicesConstants.MarkdownFileExtension);
 
-            return _fileStorageService.DeleteFileAsync(CoreConstants.PackageReadMesFolderName, fileName);
+            return _fileStorageService.DeleteFileAsync(CoreConstants.Folders.PackageReadMesFolderName, fileName);
         }
 
         /// <summary>
@@ -64,11 +65,11 @@ namespace NuGetGallery
                 throw new ArgumentNullException(nameof(readMeMd));
             }
 
-            var fileName = BuildFileName(package, ReadMeFilePathTemplateActive, Constants.MarkdownFileExtension);
+            var fileName = FileNameHelper.BuildFileName(package, ReadMeFilePathTemplateActive, ServicesConstants.MarkdownFileExtension);
 
             using (var readMeMdStream = new MemoryStream(Encoding.UTF8.GetBytes(readMeMd)))
             {
-                await _fileStorageService.SaveFileAsync(CoreConstants.PackageReadMesFolderName, fileName, readMeMdStream, overwrite: true);
+                await _fileStorageService.SaveFileAsync(CoreConstants.Folders.PackageReadMesFolderName, fileName, readMeMdStream, overwrite: true);
             }
         }
 
@@ -83,9 +84,9 @@ namespace NuGetGallery
                 throw new ArgumentNullException(nameof(package));
             }
             
-            var fileName = BuildFileName(package, ReadMeFilePathTemplateActive, Constants.MarkdownFileExtension);
+            var fileName = FileNameHelper.BuildFileName(package, ReadMeFilePathTemplateActive, ServicesConstants.MarkdownFileExtension);
 
-            using (var readMeMdStream = await _fileStorageService.GetFileAsync(CoreConstants.PackageReadMesFolderName, fileName))
+            using (var readMeMdStream = await _fileStorageService.GetFileAsync(CoreConstants.Folders.PackageReadMesFolderName, fileName))
             {
                 // Note that fileStorageService implementations return null if not found.
                 if (readMeMdStream != null)

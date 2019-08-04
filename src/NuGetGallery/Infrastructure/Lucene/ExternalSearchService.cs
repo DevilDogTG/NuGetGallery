@@ -5,33 +5,28 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
 using System.Web;
 using Newtonsoft.Json.Linq;
-using NuGet.Services.Search.Client;
-using NuGet.Services.Search.Client.Correlation;
+using NuGet.Services.Entities;
 using NuGetGallery.Configuration;
 using NuGetGallery.Diagnostics;
+using NuGetGallery.Infrastructure.Lucene;
 
-namespace NuGetGallery.Infrastructure.Lucene
+namespace NuGetGallery.Infrastructure.Search
 {
-    public class ExternalSearchService : ISearchService, IIndexingService, IRawSearchService
+    public class ExternalSearchService : ISearchService, IIndexingService, IRawSearchService, IIndexingJobFactory
     {
         public static readonly string SearchRoundtripTimePerfCounter = "SearchRoundtripTime";
-
-        private static IEndpointHealthIndicatorStore _healthIndicatorStore;
-        private static SearchClient _client;
+        private readonly ISearchClient _searchClient;
 
         private JObject _diagCache;
-
-        public Uri ServiceUri { get; private set; }
 
         protected IDiagnosticsSource Trace { get; private set; }
 
         public string IndexPath
         {
-            get { return ServiceUri.AbsoluteUri; }
+            get { return string.Empty ; }
         }
 
         public bool IsLocal
@@ -41,76 +36,11 @@ namespace NuGetGallery.Infrastructure.Lucene
 
         public bool ContainsAllVersions { get { return true; } }
 
-        public ExternalSearchService()
+        public ExternalSearchService(IAppConfiguration config, IDiagnosticsService diagnostics, ISearchClient searchClient)
         {
-            // used for testing
-            if (_healthIndicatorStore == null)
-            {
-                _healthIndicatorStore = new BaseUrlHealthIndicatorStore(new NullHealthIndicatorLogger());
-            }
-
-            if (_client == null)
-            {
-                _client = new SearchClient(
-                    ServiceUri, 
-                    "SearchGalleryQueryService/3.0.0-rc", 
-                    null, 
-                    _healthIndicatorStore, 
-                    QuietLog.LogHandledException, 
-                    new TracingHttpHandler(Trace), 
-                    new CorrelatingHttpClientHandler());
-            }
-        }
-
-        public ExternalSearchService(IAppConfiguration config, IDiagnosticsService diagnostics)
-        {
-            ServiceUri = config.ServiceDiscoveryUri;
+            _searchClient = searchClient ?? throw new ArgumentNullException(nameof(searchClient));
 
             Trace = diagnostics.SafeGetSource("ExternalSearchService");
-
-            // Extract credentials
-            var userInfo = ServiceUri.UserInfo;
-            ICredentials credentials = null;
-            if (!String.IsNullOrEmpty(userInfo))
-            {
-                var split = userInfo.Split(':');
-                if (split.Length != 2)
-                {
-                    throw new FormatException("Invalid user info in SearchServiceUri!");
-                }
-
-                // Split the credentials out
-                credentials = new NetworkCredential(split[0], split[1]);
-                ServiceUri = new UriBuilder(ServiceUri)
-                {
-                    UserName = null,
-                    Password = null
-                }.Uri;
-            }
-
-            // note: intentionally not locking the next two assignments to avoid blocking calls
-            if (_healthIndicatorStore == null)
-            {
-                _healthIndicatorStore = new BaseUrlHealthIndicatorStore(new AppInsightsHealthIndicatorLogger());
-            }
-
-            if (_client == null)
-            {
-                _client = new SearchClient(
-                    ServiceUri, 
-                    config.SearchServiceResourceType, 
-                    credentials, 
-                    _healthIndicatorStore,
-                    QuietLog.LogHandledException,
-                    new TracingHttpHandler(Trace), 
-                    new CorrelatingHttpClientHandler());
-            }
-        }
-
-        private static readonly Task<bool> _exists = Task.FromResult(true);
-        public Task<bool> Exists()
-        {
-            return _exists;
         }
 
         public virtual Task<SearchResults> RawSearch(SearchFilter filter)
@@ -128,11 +58,10 @@ namespace NuGetGallery.Infrastructure.Lucene
             // Query!
             var sw = new Stopwatch();
             sw.Start();
-            var result = await _client.Search(
+            var result = await _searchClient.Search(
                 filter.SearchTerm,
                 projectTypeFilter: null,
                 includePrerelease: filter.IncludePrerelease,
-                curatedFeed: filter.CuratedFeed?.Name,
                 sortBy: filter.SortOrder,
                 skip: filter.Skip,
                 take: filter.Take,
@@ -171,7 +100,7 @@ namespace NuGetGallery.Infrastructure.Lucene
                     result.HttpResponse.Content.Dispose();
                 }
 
-                results = new SearchResults(0, null, Enumerable.Empty<Package>().AsQueryable());
+                results = new SearchResults(0, null, Enumerable.Empty<Package>().AsQueryable(), responseMessage: result.HttpResponse);
             }
 
             Trace.PerfEvent(
@@ -184,7 +113,6 @@ namespace NuGetGallery.Infrastructure.Lucene
                     {"Hits", results == null ? -1 : results.Hits},
                     {"StatusCode", (int)result.StatusCode},
                     {"SortOrder", filter.SortOrder.ToString()},
-                    {"CuratedFeed", filter.CuratedFeed?.Name},
                     {"Url", TryGetUrl()}
                 });
 
@@ -239,7 +167,7 @@ namespace NuGetGallery.Infrastructure.Lucene
         {
             if (_diagCache == null)
             {
-                var resp = await _client.GetDiagnostics();
+                var resp = await _searchClient.GetDiagnostics();
                 if (!resp.IsSuccessStatusCode)
                 {
                     Trace.Error("HTTP Error when retrieving diagnostics: " + ((int)resp.StatusCode).ToString());

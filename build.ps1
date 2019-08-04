@@ -10,7 +10,7 @@ param (
     [string]$PackageSuffix,
     [string]$Branch,
     [string]$CommitSHA,
-    [string]$BuildBranch = '80b8f1b4a1cfe57367881e59fca063866dcaaa42'
+    [string]$BuildBranch = '2d8feecabe3aeaed7f5b4d50b9be78c94faf39ec'
 )
 
 Set-StrictMode -Version 1.0
@@ -76,27 +76,42 @@ Invoke-BuildStep 'Restoring solution packages' { `
     -ev +BuildErrors
     
 Invoke-BuildStep 'Set version metadata in AssemblyInfo.cs' {
-        $Paths = `
-            (Join-Path $PSScriptRoot "src\NuGetGallery\Properties\AssemblyInfo.g.cs"), `
-            (Join-Path $PSScriptRoot "src\NuGetGallery.Core\Properties\AssemblyInfo.g.cs")
+    $Paths = `
+        (Join-Path $PSScriptRoot "src\NuGetGallery\Properties\AssemblyInfo.g.cs"), `
+        (Join-Path $PSScriptRoot "src\NuGetGallery.Core\Properties\AssemblyInfo.g.cs"), `
+        (Join-Path $PSScriptRoot "src\NuGetGallery.Services\Properties\AssemblyInfo.g.cs"), `
+        (Join-Path $PSScriptRoot "src\NuGet.Services.Entities\Properties\AssemblyInfo.g.cs"), `
+        (Join-Path $PSScriptRoot "src\NuGet.Services.DatabaseMigration\Properties\AssemblyInfo.g.cs"), `
+        (Join-Path $PSScriptRoot "src\DatabaseMigrationTools\Properties\AssemblyInfo.g.cs"), `
+        (Join-Path $PSScriptRoot "src\AccountDeleter\Properties\AssemblyInfo.g.cs")
 
-        Foreach ($Path in $Paths) {
-            Set-VersionInfo -Path $Path -Version $SimpleVersion -Branch $Branch -Commit $CommitSHA
-        }
-    } `
-    -ev +BuildErrors
+    Foreach ($Path in $Paths) {
+        Set-VersionInfo -Path $Path -Version $SimpleVersion -Branch $Branch -Commit $CommitSHA
+    }
+} `
+-ev +BuildErrors
 
 Invoke-BuildStep 'Building solution' { 
-        $SolutionPath = Join-Path $PSScriptRoot "NuGetGallery.sln"
-        Build-Solution $Configuration $BuildNumber -MSBuildVersion "15" $SolutionPath -SkipRestore:$SkipRestore -MSBuildProperties "/p:MvcBuildViews=true" `
-    } `
-    -ev +BuildErrors
+    $SolutionPath = Join-Path $PSScriptRoot "NuGetGallery.sln"
+    Build-Solution $Configuration $BuildNumber -MSBuildVersion "15" $SolutionPath -SkipRestore:$SkipRestore -MSBuildProperties "/p:MvcBuildViews=true" `
+} `
+-ev +BuildErrors
 
-Invoke-BuildStep 'Creating artifacts' {
-    $packageId = 'NuGetGallery.Core'+$PackageSuffix 
-    New-ProjectPackage (Join-Path $PSScriptRoot "src\NuGetGallery.Core\NuGetGallery.Core.csproj") -Configuration $Configuration -Symbols -BuildNumber $BuildNumber -Version $SemanticVersion -PackageId $packageId `
-    -ev +BuildErrors
-}
+Invoke-BuildStep 'Creating artifacts' { `
+    New-ProjectPackage (Join-Path $PSScriptRoot "src\NuGetGallery.Core\NuGetGallery.Core.csproj") -Configuration $Configuration -Symbols -BuildNumber $BuildNumber -Version $SemanticVersion -PackageId "NuGetGallery.Core$PackageSuffix"
+    New-ProjectPackage (Join-Path $PSScriptRoot "src\NuGet.Services.Entities\NuGet.Services.Entities.csproj") -Configuration $Configuration -Symbols -BuildNumber $BuildNumber -Version $SemanticVersion
+    New-ProjectPackage (Join-Path $PSScriptRoot "src\NuGet.Services.DatabaseMigration\NuGet.Services.DatabaseMigration.csproj") -Configuration $Configuration -Symbols -BuildNumber $BuildNumber -Version $SemanticVersion
+    New-Package (Join-Path $PSScriptRoot "src\DatabaseMigrationTools\DatabaseMigration.Gallery.nuspec") -Configuration $Configuration -BuildNumber $BuildNumber -Version $SemanticVersion -Branch $Branch -MSBuildVersion "15"
+    New-Package (Join-Path $PSScriptRoot "src\DatabaseMigrationTools\DatabaseMigration.SupportRequest.nuspec") -Configuration $Configuration -BuildNumber $BuildNumber -Version $SemanticVersion -Branch $Branch -MSBuildVersion "15"
+    New-Package (Join-Path $PSScriptRoot "src\DatabaseMigrationTools\DatabaseMigration.Validation.nuspec") -Configuration $Configuration -BuildNumber $BuildNumber -Version $SemanticVersion -Branch $Branch -MSBuildVersion "15"
+    New-Package (Join-Path $PSScriptRoot "src\AccountDeleter\Gallery.AccountDeleter.nuspec") -Configuration $Configuration -BuildNumber $BuildNumber -Version $SemanticVersion -Branch $Branch -MSBuildVersion "15"
+} `
+-ev +BuildErrors
+
+Invoke-BuildStep 'Signing the packages' {
+    Sign-Packages -Configuration $Configuration -BuildNumber $BuildNumber -MSBuildVersion "15" `
+} `
+-ev +BuildErrors
 
 Trace-Log ('-' * 60)
 

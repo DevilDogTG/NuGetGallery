@@ -16,13 +16,15 @@
         var _uploadStartTime;
         var _uploadId;
 
-        this.init = function (pingUrl, formId, jQueryUrl, actionUrl, cancelUrl, submitVerifyUrl, uploadTracingKey) {
+        this.init = function (pingUrl, formId, jQueryUrl, actionUrl, cancelUrl, submitVerifyUrl, uploadTracingKey, previewUrl) {
             _uploadId = uploadTracingKey;
             _pingUrl = pingUrl;
             _uploadFormId = formId;
             _actionUrl = actionUrl;
             _cancelUrl = cancelUrl;
             _submitVerifyUrl = submitVerifyUrl;
+
+            BindReadMeDataManager.init(previewUrl);
 
             $('#file-select-feedback').on('dragenter', function (e) {
                 e.preventDefault();
@@ -84,7 +86,7 @@
         };
 
         function resetFileSelectFeedback() {
-            $('#file-select-feedback').attr('value', 'Browse or Drop files to select a package or symbols package...');
+            $('#file-select-feedback').attr('value', 'Browse or Drop files to select a package (.nupkg) or symbols package (.snupkg)...');
         }
 
         function prepareUploadFormData() {
@@ -214,7 +216,7 @@
         }
 
         function displayErrors(errors) {
-            if (errors == null || errors.length < 1) {
+            if (!errors || errors.length < 1) {
                 return;
             }
 
@@ -232,6 +234,7 @@
         function clearErrors() {
             $("#validation-failure-container").addClass("hidden");
             $("#validation-failure-list").remove();
+            $('#symbols-replace-warning-container').addClass('hidden');
 
             var warnings = $('#warning-container');
             warnings.addClass("hidden");
@@ -271,6 +274,12 @@
                     cancelUploadAsync();
                 });
 
+                if (model.IsSymbolsPackage && model.HasExistingAvailableSymbols) {
+                    $('#symbols-replace-warning-container').removeClass('hidden');
+                } else {
+                    $('#symbols-replace-warning-container').addClass('hidden');
+                }
+
                 $('#verify-submit-button').on('click', function () {
                     $('#verify-cancel-button').attr('disabled', 'disabled');
                     $('#verify-submit-button').attr('disabled', 'disabled');
@@ -291,7 +300,7 @@
             }
 
             if (model === null || !model.IsSymbolsPackage) {
-                bindReadMeData(model);
+                BindReadMeDataManager.bindReadMeData(model);
             }
 
             document.getElementById("validation-failure-container").scrollIntoView();

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Moq;
+using NuGet.Services.Entities;
 using NuGet.Versioning;
 using NuGetGallery.Diagnostics;
 using NuGetGallery.Framework;
@@ -34,7 +35,8 @@ namespace NuGetGallery
             {
                 get
                 {
-                    var package = fakes.Package.Packages.First();
+                    var packages = fakes.Package.Packages.ToList();
+                    var package = packages.First();
                     var identity = Fakes.ToIdentity(fakes.User);
                     yield return new object[] { "CertificateActivated",
                         (TrackAction)(s => s.TrackCertificateActivated("thumbprint"))
@@ -52,8 +54,36 @@ namespace NuGetGallery
                         (TrackAction)(s => s.TrackRequiredSignerSet(package.PackageRegistration.Id))
                     };
 
+                    yield return new object[] { "DownloadJsonRefreshDuration",
+                        (TrackAction)(s => s.TrackDownloadJsonRefreshDuration(0))
+                    };
+
+                    yield return new object[] { "DownloadCountDecreasedDuringRefresh",
+                        (TrackAction)(s => s.TrackDownloadCountDecreasedDuringRefresh(package.PackageRegistration.Id, package.Version, 0, 0))
+                    };
+
+                    yield return new object[] { "GalleryDownloadGreaterThanJsonForPackage",
+                        (TrackAction)(s => s.TrackPackageDownloadCountDecreasedFromGallery(package.PackageRegistration.Id, package.Version, 0, 0))
+                    };
+
+                    yield return new object[] { "GalleryDownloadGreaterThanJsonForPackageRegistration",
+                        (TrackAction)(s => s.TrackPackageRegistrationDownloadCountDecreasedFromGallery(package.PackageRegistration.Id, 0, 0))
+                    };
+
+                    yield return new object[] { "GetPackageDownloadCountFailed",
+                        (TrackAction)(s => s.TrackGetPackageDownloadCountFailed(package.PackageRegistration.Id, package.Version))
+                    };
+
+                    yield return new object[] { "GetPackageRegistrationDownloadCountFailed",
+                        (TrackAction)(s => s.TrackGetPackageRegistrationDownloadCountFailed(package.PackageRegistration.Id))
+                    };
+
                     yield return new object[] { "ODataQueryFilter",
                         (TrackAction)(s => s.TrackODataQueryFilterEvent("callContext", true, true, "queryPattern"))
+                    };
+
+                    yield return new object[] { "ODataCustomQuery",
+                        (TrackAction)(s => s.TrackODataCustomQuery(true))
                     };
 
                     yield return new object[] { "PackagePush",
@@ -90,6 +120,14 @@ namespace NuGetGallery
 
                     yield return new object[] { "PackageRevalidate",
                         (TrackAction)(s => s.TrackPackageRevalidate(package))
+                    };
+
+                    yield return new object[] { "PackageDeprecate",
+                        (TrackAction)(s => s.TrackPackageDeprecate(
+                            packages, 
+                            PackageDeprecationStatus.Legacy, 
+                            new PackageRegistration { Id = "alt" }, 
+                            new Package { PackageRegistration = new PackageRegistration { Id = "alt-2" }, NormalizedVersion = "1.2.3" }, true))
                     };
 
                     yield return new object[] { "CreatePackageVerificationKey",
@@ -213,7 +251,7 @@ namespace NuGetGallery
                     };
 
                     yield return new object[] { "TyposquattingCheckResultAndTotalTimeInMs",
-                        (TrackAction)(s => s.TrackMetricForTyposquattingCheckResultAndTotalTime(fakes.Package.Id, TimeSpan.FromMilliseconds(100), true, new List<string>{"newtonsoft-json" }, 10000))
+                        (TrackAction)(s => s.TrackMetricForTyposquattingCheckResultAndTotalTime(fakes.Package.Id, TimeSpan.FromMilliseconds(100), true, new List<string>{"newtonsoft-json" }, 10000, TimeSpan.FromHours(24)))
                     };
 
                     yield return new object[] { "TyposquattingChecklistRetrievalTimeInMs",
@@ -226,6 +264,62 @@ namespace NuGetGallery
 
                     yield return new object[] { "TyposquattingOwnersCheckTimeInMs",
                         (TrackAction)(s => s.TrackMetricForTyposquattingOwnersCheckTime(fakes.Package.Id, TimeSpan.FromMilliseconds(100)))
+                    };
+
+                    yield return new object[] { "InvalidLicenseMetadata",
+                        (TrackAction)(s => s.TrackInvalidLicenseMetadata("foo"))
+                    };
+
+                    yield return new object[] { "NonFsfOsiLicenseUsed",
+                        (TrackAction)(s => s.TrackNonFsfOsiLicenseUse("foo"))
+                    };
+
+                    yield return new object[] { "LicenseFileRejected",
+                        (TrackAction)(s => s.TrackLicenseFileRejected())
+                    };
+
+                    yield return new object[] { "LicenseValidationFailed",
+                        (TrackAction)(s => s.TrackLicenseValidationFailure())
+                    };
+
+                    yield return new object[] { "FeatureFlagStalenessSeconds",
+                        (TrackAction)(s => s.TrackFeatureFlagStaleness(TimeSpan.FromMilliseconds(100)))
+                    };
+
+                    yield return new object[] { "SearchExecutionDuration",
+                        (TrackAction)(s => s.TrackMetricForSearchExecutionDuration("https://www.bing.com", TimeSpan.FromMilliseconds(100), true))
+                    };
+
+                    yield return new object[] { "SearchCircuitBreakerOnBreak",
+                        (TrackAction)(s => s.TrackMetricForSearchCircuitBreakerOnBreak("SomeName", exception: null, responseMessage: null, correlationId: string.Empty, uri: string.Empty))
+                    };
+
+                    yield return new object[] { "SearchCircuitBreakerOnReset",
+                        (TrackAction)(s => s.TrackMetricForSearchCircuitBreakerOnReset("SomeName", correlationId: string.Empty, uri: string.Empty))
+                    };
+
+                    yield return new object[] { "SearchOnRetry",
+                        (TrackAction)(s => s.TrackMetricForSearchOnRetry("SomeName", exception: null, correlationId: string.Empty, uri: string.Empty, circuitBreakerStatus: string.Empty))
+                    };
+
+                    yield return new object[] { "SearchOnTimeout",
+                        (TrackAction)(s => s.TrackMetricForSearchOnTimeout("SomeName", correlationId: string.Empty, uri: string.Empty, circuitBreakerStatus: string.Empty))
+                    };
+
+                    yield return new object[] { "SearchSideBySideFeedback",
+                        (TrackAction)(s => s.TrackSearchSideBySideFeedback("nuget", 1, 2, "new", "nuget.core", null, true, true))
+                    };
+
+                    yield return new object[] { "SearchSideBySide",
+                        (TrackAction)(s => s.TrackSearchSideBySide("nuget", true, 1, true, 2))
+                    };
+
+                    yield return new object[] { "ABTestEnrollmentInitialized",
+                        (TrackAction)(s => s.TrackABTestEnrollmentInitialized(1, 42))
+                    };
+
+                    yield return new object[] { "ABTestEvaluated",
+                        (TrackAction)(s => s.TrackABTestEvaluated("SearchPreview", true, true, 0, 20))
                     };
                 }
             }
@@ -588,7 +682,7 @@ namespace NuGetGallery
                        It.Is<double>(value => value == 1),
                        It.Is<IDictionary<string, string>>(
                            properties => properties.Count == 4 &&
-                               properties["AccountDeletedByRole"] == "Admins" &&
+                               properties["AccountDeletedByRole"] == "[\"Admins\"]" &&
                                properties["AccountIsSelfDeleted"] == "False" &&
                                properties["AccountDeletedIsOrganization"] == "True" &&
                                properties["AccountDeleteSucceeded"] == "True")
@@ -628,6 +722,146 @@ namespace NuGetGallery
                 service.TrackRequestForAccountDeletion(fakes.User);
 
                 service.TelemetryClient.VerifyAll();
+            }
+
+            [Theory]
+            [InlineData(false)]
+            [InlineData(true)]
+            public void TrackODataCustomQueryAddsCorrectData(bool customQuery)
+            {
+                var service = CreateService();
+                var allProperties = new List<IDictionary<string, string>>();
+                service.TelemetryClient
+                    .Setup(x => x.TrackMetric(It.IsAny<string>(), It.IsAny<double>(), It.IsAny<IDictionary<string, string>>()))
+                    .Callback<string, double, IDictionary<string, string>>((_, __, p) => allProperties.Add(p));
+
+                service.TrackODataCustomQuery(customQuery);
+
+                service.TelemetryClient.Verify(
+                    x => x.TrackMetric("ODataCustomQuery", 1, It.IsAny<IDictionary<string, string>>()),
+                    Times.Once);
+                var properties = Assert.Single(allProperties);
+                Assert.Contains("IsCustomQuery", properties.Keys);
+                Assert.Equal(customQuery.ToString(), properties["IsCustomQuery"]);
+            }
+
+            public static IEnumerable<object[]> TrackPackageDeprecateThrowsIfPackageListInvalid_Data =>
+                new[]
+                {
+                    new object[]
+                    {
+                        null
+                    },
+                    new object[]
+                    {
+                        new Package[0]
+                    },
+                    new object[]
+                    {
+                        new []
+                        {
+                            new Package { PackageRegistrationKey = 1 },
+                            new Package { PackageRegistrationKey = 2 }
+                        }
+                    }
+                };
+
+            [Theory]
+            [MemberData(nameof(TrackPackageDeprecateThrowsIfPackageListInvalid_Data))]
+            public void TrackPackageDeprecateThrowsIfPackageListInvalid(IReadOnlyList<Package> packages)
+            {
+                var service = CreateService();
+                Assert.Throws<ArgumentException>(() => service.TrackPackageDeprecate(packages, PackageDeprecationStatus.CriticalBugs, null, null, false));
+            }
+
+            public static IEnumerable<object[]> TrackPackageDeprecateSucceedsWithoutAlternate_Data =>
+                MemberDataHelper.Combine(
+                    MemberDataHelper.EnumDataSet<PackageDeprecationStatus>(),
+                    MemberDataHelper.BooleanDataSet());
+
+            [Theory]
+            [MemberData(nameof(TrackPackageDeprecateSucceedsWithoutAlternate_Data))]
+            public void TrackPackageDeprecateSucceedsWithoutAlternate(PackageDeprecationStatus status, bool hasCustomMessage)
+            {
+                var service = CreateService();
+                var packages = fakes.Package.Packages.ToList();
+                var allProperties = new List<IDictionary<string, string>>();
+                service.TelemetryClient
+                    .Setup(x => x.TrackMetric(It.IsAny<string>(), It.IsAny<double>(), It.IsAny<IDictionary<string, string>>()))
+                    .Callback<string, double, IDictionary<string, string>>((_, __, p) => allProperties.Add(p));
+
+                service.TrackPackageDeprecate(packages, status, null, null, hasCustomMessage);
+
+                service.TelemetryClient.Verify(
+                    x => x.TrackMetric("PackageDeprecate", packages.Count(), It.IsAny<IDictionary<string, string>>()),
+                    Times.Once);
+
+                var properties = Assert.Single(allProperties);
+                Assert.Contains(
+                    new KeyValuePair<string, string>("PackageDeprecationReason", ((int)status).ToString()), 
+                    properties);
+
+                Assert.Contains(
+                    new KeyValuePair<string, string>("PackageDeprecationAlternatePackageId", null),
+                    properties);
+
+                Assert.Contains(
+                    new KeyValuePair<string, string>("PackageDeprecationAlternatePackageVersion", null),
+                    properties);
+
+                Assert.Contains(
+                    new KeyValuePair<string, string>("PackageDeprecationCustomMessage", hasCustomMessage.ToString()),
+                    properties);
+            }
+
+            public static IEnumerable<object[]> TrackPackageDeprecateSucceedsWithAlternate_Data =>
+                MemberDataHelper.Combine(
+                    MemberDataHelper.BooleanDataSet(),
+                    MemberDataHelper.BooleanDataSet());
+
+            [Theory]
+            [MemberData(nameof(TrackPackageDeprecateSucceedsWithAlternate_Data))]
+            public void TrackPackageDeprecateSucceedsWithAlternate(bool hasRegistration, bool hasPackage)
+            {
+                var service = CreateService();
+                var allProperties = new List<IDictionary<string, string>>();
+                service.TelemetryClient
+                    .Setup(x => x.TrackMetric(It.IsAny<string>(), It.IsAny<double>(), It.IsAny<IDictionary<string, string>>()))
+                    .Callback<string, double, IDictionary<string, string>>((_, __, p) => allProperties.Add(p));
+
+                var packages = fakes.Package.Packages.ToList();
+                var alternateRegistration = hasRegistration ? new PackageRegistration { Id = "alt-R" } : null;
+                var alternatePackage = hasPackage ? new Package { PackageRegistration = new PackageRegistration { Id = "alt-P" }, NormalizedVersion = "4.3.2" } : null;
+
+                var status = PackageDeprecationStatus.NotDeprecated;
+                service.TrackPackageDeprecate(packages, status, alternateRegistration, alternatePackage, false);
+
+                service.TelemetryClient.Verify(
+                    x => x.TrackMetric("PackageDeprecate", packages.Count(), It.IsAny<IDictionary<string, string>>()),
+                    Times.Once);
+
+                var properties = Assert.Single(allProperties);
+                Assert.Contains(
+                    new KeyValuePair<string, string>("PackageDeprecationReason", ((int)PackageDeprecationStatus.NotDeprecated).ToString()),
+                    properties);
+
+                var expectedAlternateId = hasRegistration 
+                    ? alternateRegistration.Id 
+                    : (hasPackage ? alternatePackage.Id : null);
+
+                Assert.Contains(
+                    new KeyValuePair<string, string>("PackageDeprecationAlternatePackageId", expectedAlternateId),
+                    properties);
+
+                var expectedAlternateVersion = hasPackage ? alternatePackage.NormalizedVersion : null;
+
+                Assert.Contains(
+                    new KeyValuePair<string, string>("PackageDeprecationAlternatePackageVersion", expectedAlternateVersion),
+                    properties);
+
+                Assert.Contains(
+                    new KeyValuePair<string, string>("PackageDeprecationCustomMessage", false.ToString()),
+                    properties);
             }
 
             private TelemetryServiceWrapper CreateServiceForCertificateTelemetry(string metricName, string thumbprint)

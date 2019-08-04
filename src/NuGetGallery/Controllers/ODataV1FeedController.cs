@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Web.Http;
 using System.Web.Http.OData;
 using System.Web.Http.OData.Query;
+using NuGet.Services.Entities;
 using NuGetGallery.Configuration;
 using NuGetGallery.OData;
 using NuGetGallery.OData.QueryFilter;
@@ -22,19 +23,26 @@ namespace NuGetGallery.Controllers
     {
         private const int MaxPageSize = SearchAdaptor.MaxPageSize;
 
-        private readonly IEntityRepository<Package> _packagesRepository;
+        private readonly IReadOnlyEntityRepository<Package> _packagesRepository;
+        private readonly IEntityRepository<Package> _readWritePackagesRepository;
         private readonly IGalleryConfigurationService _configurationService;
         private readonly ISearchService _searchService;
+        private readonly IFeatureFlagService _featureFlagService;
 
         public ODataV1FeedController(
-            IEntityRepository<Package> packagesRepository,
+            IReadOnlyEntityRepository<Package> packagesRepository,
+            IEntityRepository<Package> readWritePackagesRepository,
             IGalleryConfigurationService configurationService,
-            ISearchService searchService)
-            : base(configurationService)
+            ISearchService searchService,
+            ITelemetryService telemetryService,
+            IFeatureFlagService featureFlagService)
+            : base(configurationService, telemetryService)
         {
-            _packagesRepository = packagesRepository;
-            _configurationService = configurationService;
-            _searchService = searchService;
+            _packagesRepository = packagesRepository ?? throw new ArgumentNullException(nameof(packagesRepository));
+            _readWritePackagesRepository = readWritePackagesRepository ?? throw new ArgumentNullException(nameof(readWritePackagesRepository));
+            _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
+            _searchService = searchService ?? throw new ArgumentNullException(nameof(searchService));
+            _featureFlagService = featureFlagService ?? throw new ArgumentNullException(nameof(featureFlagService));
         }
 
         // /api/v1/Packages
@@ -43,19 +51,19 @@ namespace NuGetGallery.Controllers
         [CacheOutput(NoCache = true)]
         public IHttpActionResult Get(ODataQueryOptions<V1FeedPackage> options)
         {
-            if (!ODataQueryVerifier.AreODataOptionsAllowed(options, ODataQueryVerifier.V1Packages, 
+            if (!ODataQueryVerifier.AreODataOptionsAllowed(options, ODataQueryVerifier.V1Packages,
                 _configurationService.Current.IsODataFilterEnabled, nameof(Get)))
             {
                 return BadRequest(ODataQueryVerifier.GetValidationFailedMessage(options));
-            } 
-            var queryable = _packagesRepository.GetAll()
-                                .Where(p => !p.IsPrerelease && p.PackageStatusKey == PackageStatus.Available)
-                                .Where(SemVerLevelKey.IsUnknownPredicate())
-                                .WithoutSortOnColumn(Version)
-                                .WithoutSortOnColumn(Id, ShouldIgnoreOrderById(options))
-                                .ToV1FeedPackageQuery(_configurationService.GetSiteRoot(UseHttps()));
+            }
+            var queryable = GetAll()
+                            .Where(p => !p.IsPrerelease && p.PackageStatusKey == PackageStatus.Available)
+                            .Where(SemVerLevelKey.IsUnknownPredicate())
+                            .WithoutSortOnColumn(Version)
+                            .WithoutSortOnColumn(Id, ShouldIgnoreOrderById(options))
+                            .ToV1FeedPackageQuery(_configurationService.GetSiteRoot(UseHttps()));
 
-            return QueryResult(options, queryable, MaxPageSize);
+            return TrackedQueryResult(options, queryable, MaxPageSize, customQuery: true);
         }
 
         // /api/v1/Packages/$count
@@ -95,7 +103,7 @@ namespace NuGetGallery.Controllers
 
         private async Task<IHttpActionResult> GetCore(ODataQueryOptions<V1FeedPackage> options, string id, string version, bool return404NotFoundWhenNoResults)
         {
-            var packages = _packagesRepository.GetAll()
+            var packages = GetAll()
                 .Include(p => p.PackageRegistration)
                 .Where(p => p.PackageRegistration.Id.Equals(id, StringComparison.OrdinalIgnoreCase)
                             && !p.IsPrerelease
@@ -107,21 +115,24 @@ namespace NuGetGallery.Controllers
                 packages = packages.Where(p => p.Version == version);
             }
 
+            bool? customQuery = null;
+
             // try the search service
             try
             {
                 var searchAdaptorResult = await SearchAdaptor.FindByIdAndVersionCore(
-                    _searchService, 
-                    GetTraditionalHttpContext().Request, 
-                    packages, 
-                    id, 
-                    version, 
-                    curatedFeed: null,
+                    _searchService,
+                    GetTraditionalHttpContext().Request,
+                    packages,
+                    id,
+                    version,
                     semVerLevel: null);
 
                 // If intercepted, create a paged queryresult
                 if (searchAdaptorResult.ResultsAreProvidedBySearchService)
                 {
+                    customQuery = false;
+
                     // Packages provided by search service
                     packages = searchAdaptorResult.Packages;
 
@@ -130,6 +141,7 @@ namespace NuGetGallery.Controllers
 
                     if (return404NotFoundWhenNoResults && totalHits == 0)
                     {
+                        _telemetryService.TrackODataCustomQuery(customQuery);
                         return NotFound();
                     }
 
@@ -137,8 +149,17 @@ namespace NuGetGallery.Controllers
                         .Take(options.Top != null ? Math.Min(options.Top.Value, MaxPageSize) : MaxPageSize)
                         .ToV1FeedPackageQuery(GetSiteRoot());
 
-                    return QueryResult(options, pagedQueryable, MaxPageSize, totalHits, (o, s, resultCount) =>
-                       SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { id }, o, s));
+                    return TrackedQueryResult(
+                        options,
+                        pagedQueryable,
+                        MaxPageSize,
+                        totalHits,
+                        (o, s, resultCount) => SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { id }, o, s),
+                        customQuery);
+                }
+                else
+                {
+                    customQuery = true;
                 }
             }
             catch (Exception ex)
@@ -150,11 +171,12 @@ namespace NuGetGallery.Controllers
 
             if (return404NotFoundWhenNoResults && !packages.Any())
             {
+                _telemetryService.TrackODataCustomQuery(customQuery);
                 return NotFound();
             }
 
             var queryable = packages.ToV1FeedPackageQuery(GetSiteRoot());
-            return QueryResult(options, queryable, MaxPageSize);
+            return TrackedQueryResult(options, queryable, MaxPageSize, customQuery);
         }
 
         // /api/v1/Packages(Id=,Version=)/propertyName
@@ -197,7 +219,7 @@ namespace NuGetGallery.Controllers
             }
 
             // Perform actual search
-            var packages = _packagesRepository.GetAll()
+            var packages = GetAll()
                 .Include(p => p.PackageRegistration)
                 .Include(p => p.PackageRegistration.Owners)
                 .Where(p => p.Listed && !p.IsPrerelease && p.PackageStatusKey == PackageStatus.Available)
@@ -207,29 +229,40 @@ namespace NuGetGallery.Controllers
 
             // todo: search hijack should take queryOptions instead of manually parsing query options
             var searchAdaptorResult = await SearchAdaptor.SearchCore(
-                _searchService, 
-                GetTraditionalHttpContext().Request, 
-                packages, 
-                searchTerm, 
-                targetFramework, 
-                false, 
-                curatedFeed: null,
+                _searchService,
+                GetTraditionalHttpContext().Request,
+                packages,
+                searchTerm,
+                targetFramework,
+                includePrerelease: false, 
                 semVerLevel: null);
 
             // Packages provided by search service (even when not hijacked)
             var query = searchAdaptorResult.Packages;
+            bool? customQuery = null;
 
             // If intercepted, create a paged queryresult
             if (searchAdaptorResult.ResultsAreProvidedBySearchService)
             {
+                customQuery = false;
+
                 // Add explicit Take() needed to limit search hijack result set size if $top is specified
                 var totalHits = query.LongCount();
                 var pagedQueryable = query
                     .Take(options.Top != null ? Math.Min(options.Top.Value, MaxPageSize) : MaxPageSize)
                     .ToV1FeedPackageQuery(GetSiteRoot());
 
-                return QueryResult(options, pagedQueryable, MaxPageSize, totalHits, (o, s, resultCount) =>
-                   SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { searchTerm, targetFramework }, o, s));
+                return TrackedQueryResult(
+                    options,
+                    pagedQueryable,
+                    MaxPageSize,
+                    totalHits,
+                    (o, s, resultCount) => SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { searchTerm, targetFramework }, o, s),
+                    customQuery);
+            }
+            else
+            {
+                customQuery = true;
             }
 
             if (!ODataQueryVerifier.AreODataOptionsAllowed(options, ODataQueryVerifier.V1Search,
@@ -240,7 +273,7 @@ namespace NuGetGallery.Controllers
 
             // If not, just let OData handle things
             var queryable = query.ToV1FeedPackageQuery(GetSiteRoot());
-            return QueryResult(options, queryable, MaxPageSize);
+            return TrackedQueryResult(options, queryable, MaxPageSize, customQuery);
         }
 
         // /api/v1/Search()/$count?searchTerm=&targetFramework=&includePrerelease=
@@ -253,6 +286,15 @@ namespace NuGetGallery.Controllers
         {
             var searchResults = await Search(options, searchTerm, targetFramework);
             return searchResults.FormattedAsCountResult<V1FeedPackage>();
+        }
+
+        internal IQueryable<Package> GetAll()
+        {
+            if (_featureFlagService.IsODataDatabaseReadOnlyEnabled())
+            {
+                return _packagesRepository.GetAll();
+            }
+            return _readWritePackagesRepository.GetAll();
         }
     }
 }

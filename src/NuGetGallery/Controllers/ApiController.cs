@@ -16,6 +16,8 @@ using System.Web.Mvc;
 using Newtonsoft.Json.Linq;
 using NuGet.Frameworks;
 using NuGet.Packaging;
+using NuGet.Services.Entities;
+using NuGet.Services.Messaging.Email;
 using NuGet.Versioning;
 using NuGetGallery.Auditing;
 using NuGetGallery.Auditing.AuditedEntities;
@@ -23,7 +25,6 @@ using NuGetGallery.Authentication;
 using NuGetGallery.Configuration;
 using NuGetGallery.Filters;
 using NuGetGallery.Infrastructure.Authentication;
-using NuGetGallery.Infrastructure.Mail;
 using NuGetGallery.Infrastructure.Mail.Messages;
 using NuGetGallery.Packaging;
 using NuGetGallery.Security;
@@ -35,11 +36,14 @@ namespace NuGetGallery
         : AppController
     {
         private const string NuGetExeUrl = "https://dist.nuget.org/win-x86-commandline/v2.8.6/nuget.exe";
+        private readonly IAutocompletePackageIdsQuery _autocompletePackageIdsQuery;
+        private readonly IAutocompletePackageVersionsQuery _autocompletePackageVersionsQuery;
 
         public IApiScopeEvaluator ApiScopeEvaluator { get; set; }
         public IEntitiesContext EntitiesContext { get; set; }
         public IPackageFileService PackageFileService { get; set; }
         public IPackageService PackageService { get; set; }
+        public IPackageUpdateService PackageUpdateService { get; set; }
         public IUserService UserService { get; set; }
         public IStatisticsService StatisticsService { get; set; }
         public IContentService ContentService { get; set; }
@@ -68,6 +72,7 @@ namespace NuGetGallery
             IApiScopeEvaluator apiScopeEvaluator,
             IEntitiesContext entitiesContext,
             IPackageService packageService,
+            IPackageUpdateService packageUpdateService,
             IPackageFileService packageFileService,
             IUserService userService,
             IContentService contentService,
@@ -85,11 +90,14 @@ namespace NuGetGallery
             IPackageUploadService packageUploadService,
             IPackageDeleteService packageDeleteService,
             ISymbolPackageFileService symbolPackageFileService,
-            ISymbolPackageUploadService symbolPackageUploadService)
+            ISymbolPackageUploadService symbolPackageUploadService,
+            IAutocompletePackageIdsQuery autocompletePackageIdsQuery,
+            IAutocompletePackageVersionsQuery autocompletePackageVersionsQuery)
         {
             ApiScopeEvaluator = apiScopeEvaluator;
             EntitiesContext = entitiesContext;
             PackageService = packageService;
+            PackageUpdateService = packageUpdateService;
             PackageFileService = packageFileService;
             UserService = userService;
             ContentService = contentService;
@@ -108,12 +116,15 @@ namespace NuGetGallery
             StatisticsService = null;
             SymbolPackageFileService = symbolPackageFileService;
             SymbolPackageUploadService = symbolPackageUploadService;
+            _autocompletePackageIdsQuery = autocompletePackageIdsQuery;
+            _autocompletePackageVersionsQuery = autocompletePackageVersionsQuery;
         }
 
         public ApiController(
             IApiScopeEvaluator apiScopeEvaluator,
             IEntitiesContext entitiesContext,
             IPackageService packageService,
+            IPackageUpdateService packageUpdateService,
             IPackageFileService packageFileService,
             IUserService userService,
             IContentService contentService,
@@ -132,12 +143,14 @@ namespace NuGetGallery
             IPackageUploadService packageUploadService,
             IPackageDeleteService packageDeleteService,
             ISymbolPackageFileService symbolPackageFileService,
-            ISymbolPackageUploadService symbolPackageUploadServivce)
-            : this(apiScopeEvaluator, entitiesContext, packageService, packageFileService, userService, contentService,
-                  indexingService, searchService, statusService, messageService, auditingService,
+            ISymbolPackageUploadService symbolPackageUploadServivce,
+            IAutocompletePackageIdsQuery autocompletePackageIdsQuery,
+            IAutocompletePackageVersionsQuery autocompletePackageVersionsQuery)
+            : this(apiScopeEvaluator, entitiesContext, packageService, packageUpdateService, packageFileService, userService, 
+                  contentService, indexingService, searchService, statusService, messageService, auditingService,
                   configurationService, telemetryService, authenticationService, credentialBuilder, securityPolicies,
                   reservedNamespaceService, packageUploadService, packageDeleteService, symbolPackageFileService,
-                  symbolPackageUploadServivce)
+                  symbolPackageUploadServivce, autocompletePackageIdsQuery, autocompletePackageVersionsQuery)
         {
             StatisticsService = statisticsService;
         }
@@ -185,6 +198,11 @@ namespace NuGetGallery
                     if (isSymbolPackage)
                     {
                         package = PackageService.FindPackageByIdAndVersionStrict(id, version);
+
+                        if (package == null)
+                        {
+                            return new HttpStatusCodeWithBodyResult(HttpStatusCode.NotFound, string.Format(CultureInfo.CurrentCulture, Strings.PackageWithIdAndVersionNotFound, id, version));
+                        }
                     }
                 }
                 else
@@ -222,12 +240,9 @@ namespace NuGetGallery
 
             if (isSymbolPackage)
             {
-                var latestSymbolPackage = package?
-                    .SymbolPackages
-                    .OrderByDescending(sp => sp.Created)
-                    .FirstOrDefault();
+                var latestAvailableSymbolsPackage = package.LatestAvailableSymbolPackage();
 
-                if (latestSymbolPackage == null || latestSymbolPackage.StatusKey != PackageStatus.Available)
+                if (latestAvailableSymbolsPackage == null)
                 {
                     return new HttpStatusCodeWithBodyResult(HttpStatusCode.NotFound, string.Format(CultureInfo.CurrentCulture, Strings.SymbolsPackage_PackageNotAvailable, id, version));
                 }
@@ -271,7 +286,13 @@ namespace NuGetGallery
         [ActionName("HealthProbeApi")]
         public ActionResult HealthProbe()
         {
-            return new HttpStatusCodeWithBodyResult(HttpStatusCode.OK, "Gallery is Available");
+            return View();
+        }
+
+        [HttpGet]
+        public virtual ActionResult SimulateError(SimulatedErrorType type = SimulatedErrorType.Exception)
+        {
+            return type.MapToMvcResult();
         }
 
         [HttpPost]
@@ -530,7 +551,7 @@ namespace NuGetGallery
                                     errorsString));
                             }
 
-                            if (nuspec.GetMinClientVersion() > Constants.MaxSupportedMinClientVersion)
+                            if (nuspec.GetMinClientVersion() > GalleryConstants.MaxSupportedMinClientVersion)
                             {
                                 return new HttpStatusCodeWithBodyResult(HttpStatusCode.BadRequest, string.Format(
                                     CultureInfo.CurrentCulture,
@@ -605,7 +626,7 @@ namespace NuGetGallery
                             }
 
                             // Perform all the validations we can before adding the package to the entity context.
-                            var beforeValidationResult = await PackageUploadService.ValidateBeforeGeneratePackageAsync(packageToPush, packageMetadata);
+                            var beforeValidationResult = await PackageUploadService.ValidateBeforeGeneratePackageAsync(packageToPush, packageMetadata, currentUser);
                             var beforeValidationActionResult = GetActionResultOrNull(beforeValidationResult);
                             if (beforeValidationActionResult != null)
                             {
@@ -688,7 +709,7 @@ namespace NuGetGallery
                                     ConfigurationService.Current,
                                     package,
                                     Url.Package(package.PackageRegistration.Id, package.NormalizedVersion, relativeUrl: false),
-                                    Url.ReportPackage(package.PackageRegistration.Id, package.NormalizedVersion, relativeUrl: false),
+                                    Url.ReportPackage(package, relativeUrl: false),
                                     Url.AccountSettings(relativeUrl: false),
                                     packagePolicyResult.WarningMessages);
 
@@ -702,7 +723,7 @@ namespace NuGetGallery
                                     ConfigurationService.Current,
                                     package,
                                     Url.Package(package.PackageRegistration.Id, package.NormalizedVersion, relativeUrl: false),
-                                    Url.ReportPackage(package.PackageRegistration.Id, package.NormalizedVersion, relativeUrl: false),
+                                    Url.ReportPackage(package, relativeUrl: false),
                                     packagePolicyResult.WarningMessages);
 
                                 await MessageService.SendMessageAsync(packageAddedWithWarningsMessage);
@@ -710,12 +731,12 @@ namespace NuGetGallery
 
                             TelemetryService.TrackPackagePushEvent(package, currentUser, User.Identity);
 
-                            var warnings = new List<string>();
+                            var warnings = new List<IValidationMessage>();
                             warnings.AddRange(beforeValidationResult.Warnings);
                             warnings.AddRange(afterValidationResult.Warnings);
                             if (package.SemVerLevelKey == SemVerLevelKey.SemVer2)
                             {
-                                warnings.Add(Strings.WarningSemVer2PackagePushed);
+                                warnings.Add(new PlainTextOnlyValidationMessage(Strings.WarningSemVer2PackagePushed));
                             }
 
                             return new HttpStatusCodeWithServerWarningResult(HttpStatusCode.Created, warnings);
@@ -728,6 +749,10 @@ namespace NuGetGallery
                     catch (InvalidDataException ex)
                     {
                         return BadRequestForExceptionMessage(ex);
+                    }
+                    catch (PackageAlreadyExistsException ex)
+                    {
+                        return new HttpStatusCodeWithBodyResult(HttpStatusCode.Conflict, ex.Message);
                     }
                     catch (EntityException ex)
                     {
@@ -760,9 +785,7 @@ namespace NuGetGallery
                 case PackageValidationResultType.Accepted:
                     return null;
                 case PackageValidationResultType.Invalid:
-                case PackageValidationResultType.PackageShouldNotBeSigned:
-                case PackageValidationResultType.PackageShouldNotBeSignedButCanManageCertificates:
-                    return new HttpStatusCodeWithBodyResult(HttpStatusCode.BadRequest, validationResult.Message);
+                    return new HttpStatusCodeWithBodyResult(HttpStatusCode.BadRequest, validationResult.Message.PlainTextMessage);
                 default:
                     throw new NotImplementedException($"The package validation result type {validationResult.Type} is not supported.");
             }
@@ -802,8 +825,7 @@ namespace NuGetGallery
                     string.Format(CultureInfo.CurrentCulture, Strings.PackageIsLocked, package.PackageRegistration.Id));
             }
 
-            await PackageService.MarkPackageUnlistedAsync(package);
-            IndexingService.UpdatePackage(package);
+            await PackageUpdateService.MarkPackageUnlistedAsync(package);
             return new EmptyResult();
         }
 
@@ -834,14 +856,13 @@ namespace NuGetGallery
                     string.Format(CultureInfo.CurrentCulture, Strings.PackageIsLocked, package.PackageRegistration.Id));
             }
 
-            await PackageService.MarkPackageListedAsync(package);
-            IndexingService.UpdatePackage(package);
+            await PackageUpdateService.MarkPackageListedAsync(package);
             return new EmptyResult();
         }
 
         public virtual async Task<ActionResult> Team()
         {
-            var team = await ContentService.GetContentItemAsync(Constants.ContentNames.Team, TimeSpan.FromHours(1));
+            var team = await ContentService.GetContentItemAsync(GalleryConstants.ContentNames.Team, TimeSpan.FromHours(1));
             return Content(team.ToString(), "application/json");
         }
 
@@ -887,10 +908,9 @@ namespace NuGetGallery
             bool? includePrerelease,
             string semVerLevel = null)
         {
-            var query = GetService<IAutoCompletePackageIdsQuery>();
             return new JsonResult
             {
-                Data = (await query.Execute(partialId, includePrerelease, semVerLevel)).ToArray(),
+                Data = (await _autocompletePackageIdsQuery.Execute(partialId, includePrerelease, semVerLevel)).ToArray(),
                 JsonRequestBehavior = JsonRequestBehavior.AllowGet
             };
         }
@@ -902,10 +922,9 @@ namespace NuGetGallery
             bool? includePrerelease,
             string semVerLevel = null)
         {
-            var query = GetService<IAutoCompletePackageVersionsQuery>();
             return new JsonResult
             {
-                Data = (await query.Execute(id, includePrerelease, semVerLevel)).ToArray(),
+                Data = (await _autocompletePackageVersionsQuery.Execute(id, includePrerelease, semVerLevel)).ToArray(),
                 JsonRequestBehavior = JsonRequestBehavior.AllowGet
             };
         }

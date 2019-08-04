@@ -14,6 +14,7 @@ using System.Web.Http.OData;
 using System.Web.Http.OData.Builder;
 using System.Web.Http.OData.Query;
 using Moq;
+using NuGet.Services.Entities;
 using NuGetGallery.Configuration;
 using NuGetGallery.Framework;
 using NuGetGallery.OData;
@@ -31,7 +32,7 @@ namespace NuGetGallery.Controllers
         protected readonly IReadOnlyCollection<Package> UnavailablePackages;
         protected readonly IReadOnlyCollection<Package> NonSemVer2Packages;
         protected readonly IReadOnlyCollection<Package> SemVer2Packages;
-        protected readonly IEntityRepository<Package> PackagesRepository;
+        protected readonly IReadOnlyEntityRepository<Package> PackagesRepository;
         protected readonly IQueryable<Package> AllPackages;
 
         protected ODataFeedControllerFactsBase()
@@ -43,23 +44,36 @@ namespace NuGetGallery.Controllers
             NonSemVer2Packages = AvailablePackages.Where(p => p.SemVerLevelKey == SemVerLevelKey.Unknown).ToList();
             SemVer2Packages = AvailablePackages.Where(p => p.SemVerLevelKey == SemVerLevelKey.SemVer2).ToList();
 
-            var packagesRepositoryMock = new Mock<IEntityRepository<Package>>(MockBehavior.Strict);
+            var packagesRepositoryMock = new Mock<IReadOnlyEntityRepository<Package>>(MockBehavior.Strict);
             packagesRepositoryMock.Setup(m => m.GetAll()).Returns(AllPackages).Verifiable();
             PackagesRepository = packagesRepositoryMock.Object;
         }
 
         protected abstract TController CreateController(
-            IEntityRepository<Package> packagesRepository,
+            IReadOnlyEntityRepository<Package> packagesRepository,
+            IEntityRepository<Package> readWritePackagesRepository,
             IGalleryConfigurationService configurationService,
-            ISearchService searchService);
+            ISearchService searchService,
+            ITelemetryService telemetryService,
+            IFeatureFlagService featureFlagService);
 
         protected TController CreateTestableODataFeedController(HttpRequestMessage request)
         {
             var searchService = new Mock<ISearchService>().Object;
             var configurationService = new TestGalleryConfigurationService();
             configurationService.Current.SiteRoot = _siteRoot;
+            var telemetryService = new Mock<ITelemetryService>();
+            var featureFlagService = new Mock<IFeatureFlagService>();
+            featureFlagService.Setup(ff => ff.IsODataDatabaseReadOnlyEnabled()).Returns(true);
+            var readWritePackagesRepositoryMock = new Mock<IEntityRepository<Package>>();
 
-            var controller = CreateController(PackagesRepository, configurationService, searchService);
+            var controller = CreateController(
+                PackagesRepository,
+                readWritePackagesRepositoryMock.Object,
+                configurationService,
+                searchService,
+                telemetryService.Object,
+                featureFlagService.Object);
 
             AddRequestToController(request, controller);
 

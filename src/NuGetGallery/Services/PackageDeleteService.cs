@@ -7,6 +7,7 @@ using System.Data.SqlClient;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.WindowsAzure.Storage;
+using NuGet.Services.Entities;
 using NuGet.Versioning;
 using NuGetGallery.Auditing;
 using NuGetGallery.Configuration;
@@ -28,6 +29,10 @@ namespace NuGetGallery
                 DELETE pro FROM PackageRegistrationOwners AS pro
                 WHERE pro.[PackageRegistrationKey] = @key
 
+                UPDATE PackageDeprecations
+                SET AlternatePackageRegistrationKey = NULL
+                WHERE AlternatePackageRegistrationKey = @key
+
                 DELETE pr FROM PackageRegistrations AS pr
                 WHERE pr.[Key] = @key
             END";
@@ -46,6 +51,7 @@ namespace NuGetGallery
         private readonly ISymbolPackageFileService _symbolPackageFileService;
         private readonly ISymbolPackageService _symbolPackageService;
         private readonly IEntityRepository<SymbolPackage> _symbolPackageRepository;
+        private readonly ICoreLicenseFileService _coreLicenseFileService;
 
         public PackageDeleteService(
             IEntityRepository<Package> packageRepository,
@@ -61,7 +67,8 @@ namespace NuGetGallery
             ITelemetryService telemetryService,
             ISymbolPackageFileService symbolPackageFileService,
             ISymbolPackageService symbolPackageService,
-            IEntityRepository<SymbolPackage> symbolPackageRepository)
+            IEntityRepository<SymbolPackage> symbolPackageRepository,
+            ICoreLicenseFileService coreLicenseFileService)
         {
             _packageRepository = packageRepository ?? throw new ArgumentNullException(nameof(packageRepository));
             _packageRegistrationRepository = packageRegistrationRepository ?? throw new ArgumentNullException(nameof(packageRegistrationRepository));
@@ -77,6 +84,7 @@ namespace NuGetGallery
             _symbolPackageFileService = symbolPackageFileService ?? throw new ArgumentNullException(nameof(symbolPackageFileService));
             _symbolPackageService = symbolPackageService ?? throw new ArgumentNullException(nameof(symbolPackageService));
             _symbolPackageRepository = symbolPackageRepository ?? throw new ArgumentNullException(nameof(symbolPackageRepository));
+            _coreLicenseFileService = coreLicenseFileService ?? throw new ArgumentNullException(nameof(coreLicenseFileService));
 
             if (config.HourLimitWithMaximumDownloads.HasValue
                 && config.StatisticsUpdateFrequencyInHours.HasValue
@@ -276,6 +284,8 @@ namespace NuGetGallery
                         PackageStatus.Deleted,
                         commitChanges: false);
 
+                    UnlinkPackageDeprecations(package);
+
                     // Mark all associated symbol packages for deletion.
                     foreach (var symbolPackage in package.SymbolPackages)
                     {
@@ -323,6 +333,8 @@ namespace NuGetGallery
                 // Remove the package and related entities from the database
                 foreach (var package in packages)
                 {
+                    UnlinkPackageDeprecations(package);
+
                     await ExecuteSqlCommandAsync(_entitiesContext.GetDatabase(),
                         "DELETE pa FROM PackageAuthors pa JOIN Packages p ON p.[Key] = pa.PackageKey WHERE p.[Key] = @key",
                         new SqlParameter("@key", package.Key));
@@ -402,6 +414,7 @@ namespace NuGetGallery
                 hash: string.Empty,
                 packageRecord: null,
                 registrationRecord: null,
+                deprecationRecord: null,
                 action: AuditedPackageAction.Delete,
                 reason: "reflow hard-deleted package");
 
@@ -460,6 +473,8 @@ namespace NuGetGallery
                             : package.NormalizedVersion;
 
                 await _packageFileService.DeletePackageFileAsync(id, version);
+                // we didn't backup license file before deleting it because it is backed up as part of the package
+                await _coreLicenseFileService.DeleteLicenseFileAsync(id, version);
                 await _symbolPackageFileService.DeletePackageFileAsync(id, version);
 
                 await _packageFileService.DeleteValidationPackageFileAsync(id, version);
@@ -502,6 +517,15 @@ namespace NuGetGallery
                 await _packageFileService.DeleteReadMeMdFileAsync(package);
             }
             catch (StorageException) { }
+        }
+
+        private void UnlinkPackageDeprecations(Package package)
+        {
+            foreach (var deprecation in package.AlternativeOf.ToList())
+            {
+                package.AlternativeOf.Remove(deprecation);
+                deprecation.AlternatePackage = null;
+            }
         }
 
         private void UpdateSearchIndex()

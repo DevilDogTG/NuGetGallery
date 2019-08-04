@@ -9,6 +9,8 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web.Mvc;
+using NuGet.Services.Entities;
+using NuGet.Services.Messaging.Email;
 using NuGetGallery.Areas.Admin;
 using NuGetGallery.Areas.Admin.ViewModels;
 using NuGetGallery.Authentication;
@@ -16,7 +18,6 @@ using NuGetGallery.Configuration;
 using NuGetGallery.Filters;
 using NuGetGallery.Helpers;
 using NuGetGallery.Infrastructure.Authentication;
-using NuGetGallery.Infrastructure.Mail;
 using NuGetGallery.Infrastructure.Mail.Messages;
 using NuGetGallery.Security;
 
@@ -28,7 +29,6 @@ namespace NuGetGallery
         private readonly IPackageOwnerRequestService _packageOwnerRequestService;
         private readonly IAppConfiguration _config;
         private readonly ICredentialBuilder _credentialBuilder;
-        private readonly IDeleteAccountService _deleteAccountService;
         private readonly ISupportRequestService _supportRequestService;
 
         public UsersController(
@@ -55,12 +55,12 @@ namespace NuGetGallery
                   securityPolicyService,
                   certificateService,
                   contentObjectService,
-                  messageServiceConfiguration)
+                  messageServiceConfiguration,
+                  deleteAccountService)
         {
             _packageOwnerRequestService = packageOwnerRequestService ?? throw new ArgumentNullException(nameof(packageOwnerRequestService));
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _credentialBuilder = credentialBuilder ?? throw new ArgumentNullException(nameof(credentialBuilder));
-            _deleteAccountService = deleteAccountService ?? throw new ArgumentNullException(nameof(deleteAccountService));
             _supportRequestService = supportRequestService ?? throw new ArgumentNullException(nameof(supportRequestService));
         }
 
@@ -103,6 +103,8 @@ namespace NuGetGallery
             }
             return null;
         }
+
+        protected override string GetDeleteAccountViewName() => "DeleteUserAccount";
 
         protected override DeleteAccountViewModel<User> GetDeleteAccountViewModel(User account)
         {
@@ -148,7 +150,7 @@ namespace NuGetGallery
             var accountToTransform = GetCurrentUser();
 
             var adminUsername = transformViewModel.AdminUsername;
-            if (Regex.IsMatch(adminUsername, Constants.EmailValidationRegex, RegexOptions.None, Constants.EmailValidationRegexTimeout))
+            if (Regex.IsMatch(adminUsername, GalleryConstants.EmailValidationRegex, RegexOptions.None, GalleryConstants.EmailValidationRegexTimeout))
             {
                 ModelState.AddModelError(string.Empty, Strings.TransformAccount_AdminNameIsEmail);
                 return View(transformViewModel);
@@ -200,7 +202,7 @@ namespace NuGetGallery
             // sign out pending organization and prompt for admin sign in
             OwinContext.Authentication.SignOut();
 
-            TempData[Constants.ReturnUrlMessageViewDataKey] = String.Format(CultureInfo.CurrentCulture,
+            TempData[GalleryConstants.ReturnUrlMessageViewDataKey] = String.Format(CultureInfo.CurrentCulture,
                 Strings.TransformAccount_SignInToConfirm, adminUser.Username, accountToTransform.Username);
 
             var returnUrl = Url.ConfirmTransformAccount(accountToTransform);
@@ -330,10 +332,9 @@ namespace NuGetGallery
             if (!user.Confirmed)
             {
                 // Unconfirmed users can be deleted immediately without creating a support request.
-                DeleteUserAccountStatus accountDeleteStatus = await _deleteAccountService.DeleteAccountAsync(userToBeDeleted: user,
+                DeleteAccountStatus accountDeleteStatus = await DeleteAccountService.DeleteAccountAsync(userToBeDeleted: user,
                     userToExecuteTheDelete: user,
-                    orphanPackagePolicy: AccountDeletionOrphanPackagePolicy.UnlistOrphans,
-                    commitAsTransaction: true);
+                    orphanPackagePolicy: AccountDeletionOrphanPackagePolicy.UnlistOrphans);
                 if (!accountDeleteStatus.Success)
                 {
                     TempData["RequestFailedMessage"] = Strings.AccountSelfDelete_Fail;
@@ -355,47 +356,6 @@ namespace NuGetGallery
             }
 
             return RedirectToAction(nameof(DeleteRequest));
-        }
-
-        [HttpGet]
-        [UIAuthorize(Roles = "Admins")]
-        public virtual ActionResult Delete(string accountName)
-        {
-            var user = UserService.FindByUsername(accountName);
-            if (user == null || user.IsDeleted || (user is Organization))
-            {
-                return HttpNotFound();
-            }
-
-            return View("DeleteUserAccount", GetDeleteAccountViewModel(user));
-        }
-
-        [HttpDelete]
-        [UIAuthorize(Roles = "Admins")]
-        [RequiresAccountConfirmation("Delete account")]
-        [ValidateAntiForgeryToken]
-        public virtual async Task<ActionResult> Delete(DeleteAccountAsAdminViewModel model)
-        {
-            var user = UserService.FindByUsername(model.AccountName);
-            if (user == null || user.IsDeleted)
-            {
-                return View("DeleteUserAccountStatus", new DeleteUserAccountStatus()
-                {
-                    AccountName = model.AccountName,
-                    Description = $"Account {model.AccountName} not found.",
-                    Success = false
-                });
-            }
-            else
-            {
-                var admin = GetCurrentUser();
-                var status = await _deleteAccountService.DeleteAccountAsync(
-                    userToBeDeleted: user,
-                    userToExecuteTheDelete: admin,
-                    orphanPackagePolicy: model.ShouldUnlist ? AccountDeletionOrphanPackagePolicy.UnlistOrphans : AccountDeletionOrphanPackagePolicy.KeepOrphans,
-                    commitAsTransaction: true);
-                return View("DeleteUserAccountStatus", status);
-            }
         }
 
         [HttpGet]
@@ -452,7 +412,7 @@ namespace NuGetGallery
         {
             // No need to redirect here after someone logs in...
             // By having this value present in the dictionary BUT null, we don't put "returnUrl" on the Login link at all
-            ViewData[Constants.ReturnUrlViewDataKey] = null;
+            ViewData[GalleryConstants.ReturnUrlViewDataKey] = null;
             return View();
         }
 
@@ -535,7 +495,7 @@ namespace NuGetGallery
         {
             // We don't want Login to have us as a return URL
             // By having this value present in the dictionary BUT null, we don't put "returnUrl" on the Login link at all
-            ViewData[Constants.ReturnUrlViewDataKey] = null;
+            ViewData[GalleryConstants.ReturnUrlViewDataKey] = null;
 
             return View();
         }
@@ -546,11 +506,11 @@ namespace NuGetGallery
         {
             // We don't want Login to have us as a return URL
             // By having this value present in the dictionary BUT null, we don't put "returnUrl" on the Login link at all
-            ViewData[Constants.ReturnUrlViewDataKey] = null;
+            ViewData[GalleryConstants.ReturnUrlViewDataKey] = null;
 
             if (ModelState.IsValid)
             {
-                var result = await AuthenticationService.GeneratePasswordResetToken(model.Email, Constants.PasswordResetTokenExpirationHours * 60);
+                var result = await AuthenticationService.GeneratePasswordResetToken(model.Email, GalleryConstants.PasswordResetTokenExpirationHours * 60);
                 switch (result.Type)
                 {
                     case PasswordResetResultType.UserNotConfirmed:
@@ -574,10 +534,10 @@ namespace NuGetGallery
         {
             // We don't want Login to have us as a return URL
             // By having this value present in the dictionary BUT null, we don't put "returnUrl" on the Login link at all
-            ViewData[Constants.ReturnUrlViewDataKey] = null;
+            ViewData[GalleryConstants.ReturnUrlViewDataKey] = null;
 
             ViewBag.Email = TempData["Email"];
-            ViewBag.Expiration = Constants.PasswordResetTokenExpirationHours;
+            ViewBag.Expiration = GalleryConstants.PasswordResetTokenExpirationHours;
             return View();
         }
 
@@ -586,7 +546,7 @@ namespace NuGetGallery
         {
             // We don't want Login to have us as a return URL
             // By having this value present in the dictionary BUT null, we don't put "returnUrl" on the Login link at all
-            ViewData[Constants.ReturnUrlViewDataKey] = null;
+            ViewData[GalleryConstants.ReturnUrlViewDataKey] = null;
 
             ViewBag.ResetTokenValid = true;
             ViewBag.ForgotPassword = forgot;
@@ -599,7 +559,7 @@ namespace NuGetGallery
         {
             // We don't want Login to have us as a return URL
             // By having this value present in the dictionary BUT null, we don't put "returnUrl" on the Login link at all
-            ViewData[Constants.ReturnUrlViewDataKey] = null;
+            ViewData[GalleryConstants.ReturnUrlViewDataKey] = null;
 
             if (!ModelState.IsValid)
             {
@@ -658,7 +618,7 @@ namespace NuGetGallery
                     DownloadCount = p.PackageRegistration.DownloadCount
                 }).ToList();
 
-            var model = new UserProfileModel(user, currentUser, packages, page - 1, Constants.DefaultPackageListPageSize, Url);
+            var model = new UserProfileModel(user, currentUser, packages, page - 1, GalleryConstants.DefaultPackageListPageSize, Url);
 
             return View(model);
         }
@@ -676,7 +636,7 @@ namespace NuGetGallery
             if (oldPassword == null)
             {
                 // User is requesting a password set email
-                var resetResultType = await AuthenticationService.GeneratePasswordResetToken(user, Constants.PasswordResetTokenExpirationHours * 60);
+                var resetResultType = await AuthenticationService.GeneratePasswordResetToken(user, GalleryConstants.PasswordResetTokenExpirationHours * 60);
                 if (resetResultType == PasswordResetResultType.UserNotConfirmed)
                 {
                     ModelState.AddModelError("ChangePassword", Strings.UserIsNotYetConfirmed);

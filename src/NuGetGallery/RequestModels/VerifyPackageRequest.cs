@@ -4,7 +4,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using NuGet.Packaging;
+using NuGet.Services.Entities;
 using NuGetGallery.Packaging;
+using NuGetGallery.ViewModels;
 
 namespace NuGetGallery
 {
@@ -29,12 +31,13 @@ namespace NuGetGallery
             MinClientVersionDisplay = packageMetadata.MinClientVersion.ToFullStringSafe();
             FrameworkReferenceGroups = packageMetadata.GetFrameworkReferenceGroups();
             Dependencies = new DependencySetsViewModel(packageMetadata.GetDependencyGroups().AsPackageDependencyEnumerable());
-            DevelopmentDependency = packageMetadata.GetValueFromMetadata("developmentDependency");
+            DevelopmentDependency = packageMetadata.DevelopmentDependency;
             Authors = packageMetadata.Authors.Flatten();
             Copyright = packageMetadata.Copyright;
             Description = packageMetadata.Description;
             IconUrl = packageMetadata.IconUrl.ToEncodedUrlStringOrNull();
             LicenseUrl = packageMetadata.LicenseUrl.ToEncodedUrlStringOrNull();
+            LicenseExpression = packageMetadata.LicenseMetadata?.Type == LicenseType.Expression ? packageMetadata.LicenseMetadata?.License : null;
             ProjectUrl = packageMetadata.ProjectUrl.ToEncodedUrlStringOrNull();
             RepositoryUrl = packageMetadata.RepositoryUrl.ToEncodedUrlStringOrNull();
             RepositoryType = packageMetadata.RepositoryType;
@@ -102,11 +105,14 @@ namespace NuGetGallery
         public string Copyright { get; set; }
         public string Description { get; set; }
         public DependencySetsViewModel Dependencies { get; set; }
-        public string DevelopmentDependency { get; set; }
+        public bool DevelopmentDependency { get; set; }
         public IReadOnlyCollection<FrameworkSpecificGroup> FrameworkReferenceGroups { get; set; }
         public string IconUrl { get; set; }
         public string Language { get; set; }
         public string LicenseUrl { get; set; }
+        public string LicenseExpression { get; set; }
+        public IReadOnlyCollection<CompositeLicenseExpressionSegmentViewModel> LicenseExpressionSegments { get; set; }
+        public string LicenseFileContents { get; set; }
         public string MinClientVersionDisplay { get; set; }
         public string ProjectUrl { get; set; }
         public string RepositoryUrl { get; set; }
@@ -117,8 +123,9 @@ namespace NuGetGallery
         public string Tags { get; set; }
         public string Title { get; set; }
         public bool IsSymbolsPackage { get; set; }
+        public bool HasExistingAvailableSymbols { get; set; }
 
-        public List<string> Warnings { get; set; } = new List<string>();
+        public List<JsonValidationMessage> Warnings { get; set; } = new List<JsonValidationMessage>();
 
         private static IReadOnlyCollection<string> ParseUserList(IEnumerable<User> users)
         {

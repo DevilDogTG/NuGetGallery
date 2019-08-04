@@ -16,8 +16,11 @@ namespace GalleryTools
             commandLineApplication.HelpOption("-? | -h | --help");
             commandLineApplication.Command("hash", HashCommand.Configure);
             commandLineApplication.Command("reflow", ReflowCommand.Configure);
+            commandLineApplication.Command("applyTenantPolicy", ApplyTenantPolicyCommand.Configure);
             commandLineApplication.Command("fillrepodata", BackfillRepositoryMetadataCommand.Configure);
+            commandLineApplication.Command("filldevdeps", BackfillDevelopmentDependencyCommand.Configure);
             commandLineApplication.Command("verifyapikey", VerifyApiKeyCommand.Configure);
+            commandLineApplication.Command("updateIsLatest", UpdateIsLatestCommand.Configure);
 
             try
             {

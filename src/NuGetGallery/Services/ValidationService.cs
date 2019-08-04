@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Data.Entity;
 using System.Linq;
 using System.Threading.Tasks;
+using NuGet.Services.Entities;
 using NuGet.Services.Validation;
 using NuGet.Services.Validation.Issues;
 using NuGetGallery.Configuration;
@@ -48,14 +49,25 @@ namespace NuGetGallery
             }
         }
 
+        public async Task UpdatePackageAsync(Package package)
+        {
+            var packageStatus = _packageValidationInitiator.GetPackageStatus(package);
+
+            await UpdatePackageInternalAsync(package, packageStatus);
+        }
+
+        public async Task UpdatePackageAsync(SymbolPackage symbolPackage)
+        {
+            var symbolPackageStatus = _symbolPackageValidationInitiator.GetPackageStatus(symbolPackage);
+
+            await UpdateSymbolPackageInternalAsync(symbolPackage, symbolPackageStatus);
+        }
+
         public async Task StartValidationAsync(Package package)
         {
             var packageStatus = await _packageValidationInitiator.StartValidationAsync(package);
 
-            await _packageService.UpdatePackageStatusAsync(
-                package,
-                packageStatus,
-                commitChanges: false);
+            await UpdatePackageInternalAsync(package, packageStatus);
         }
 
         public async Task RevalidateAsync(Package package)
@@ -90,6 +102,34 @@ namespace NuGetGallery
             return GetValidationIssues(symbolPackage.Key, symbolPackage.StatusKey, ValidatingType.SymbolPackage);
         }
 
+        public async Task StartValidationAsync(SymbolPackage symbolPackage)
+        {
+            var symbolPackageStatus = await _symbolPackageValidationInitiator.StartValidationAsync(symbolPackage);
+            await UpdateSymbolPackageInternalAsync(symbolPackage, symbolPackageStatus);
+        }
+
+        public async Task RevalidateAsync(SymbolPackage symbolPackage)
+        {
+            await _symbolPackageValidationInitiator.StartValidationAsync(symbolPackage);
+
+            _telemetryService.TrackSymbolPackageRevalidate(symbolPackage.Id, symbolPackage.Version);
+        }
+
+        private async Task UpdatePackageInternalAsync(Package package, PackageStatus packageStatus)
+        {
+            await _packageService.UpdatePackageStatusAsync(
+                package,
+                packageStatus,
+                commitChanges: false);
+        }
+
+        private async Task UpdateSymbolPackageInternalAsync(SymbolPackage symbolPackage, PackageStatus symbolPackageStatus)
+        {
+            await _symbolPackageService.UpdateStatusAsync(symbolPackage,
+                symbolPackageStatus,
+                commitChanges: false);
+        }
+
         private IReadOnlyList<ValidationIssue> GetValidationIssues(int entityKey, PackageStatus status, ValidatingType validatingType)
         {
             IReadOnlyList<ValidationIssue> issues = new ValidationIssue[0];
@@ -115,21 +155,6 @@ namespace NuGetGallery
             }
 
             return issues;
-        }
-
-        public async Task StartValidationAsync(SymbolPackage symbolPackage)
-        {
-            var symbolPackageStatus = await _symbolPackageValidationInitiator.StartValidationAsync(symbolPackage);
-            await _symbolPackageService.UpdateStatusAsync(symbolPackage,
-                symbolPackageStatus,
-                commitChanges: false);
-        }
-
-        public async Task RevalidateAsync(SymbolPackage symbolPackage)
-        {
-            await _symbolPackageValidationInitiator.StartValidationAsync(symbolPackage);
-
-            _telemetryService.TrackSymbolPackageRevalidate(symbolPackage.Id, symbolPackage.Version);
         }
     }
 }

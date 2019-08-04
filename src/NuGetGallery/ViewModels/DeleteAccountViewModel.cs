@@ -1,11 +1,9 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using NuGetGallery.Areas.Admin;
-using NuGetGallery.Areas.Admin.Models;
+using NuGet.Services.Entities;
 
 namespace NuGetGallery
 {
@@ -14,9 +12,8 @@ namespace NuGetGallery
         public DeleteAccountViewModel(
             TAccount accountToDelete,
             User currentUser,
-            IPackageService packageService,
-            Func<ListPackageItemViewModel, bool> packageIsOrphaned)
-            : base(accountToDelete, currentUser, packageService, packageIsOrphaned)
+            IPackageService packageService)
+            : base(accountToDelete, currentUser, packageService)
         {
             Account = accountToDelete;
         }
@@ -26,43 +23,49 @@ namespace NuGetGallery
 
     public class DeleteAccountViewModel : IDeleteAccountViewModel
     {
-        private Lazy<bool> _hasOrphanPackages;
-
         public DeleteAccountViewModel(
             User userToDelete,
             User currentUser,
-            IPackageService packageService,
-            Func<ListPackageItemViewModel, bool> packageIsOrphaned)
+            IPackageService packageService)
         {
             User = userToDelete;
 
             Packages = packageService
                  .FindPackagesByAnyMatchingOwner(User, includeUnlisted: true)
-                 .Select(p => new ListPackageItemViewModel(p, currentUser))
+                 .Select(p => new DeleteAccountListPackageItemViewModel(p, userToDelete, currentUser, packageService))
                  .ToList();
 
-            _hasOrphanPackages = new Lazy<bool>(() => Packages.Any(packageIsOrphaned));
+            HasPackagesThatWillBeOrphaned = Packages.Any(p => p.WillBeOrphaned);
         }
 
-        public List<ListPackageItemViewModel> Packages { get; }
+        public List<DeleteAccountListPackageItemViewModel> Packages { get; }
 
         public User User { get; }
 
         public string AccountName => User.Username;
 
-        public bool HasOrphanPackages
+        public bool HasPackagesThatWillBeOrphaned { get; }
+    }
+
+    public class DeleteAccountListPackageItemViewModel : ListPackageItemViewModel
+    {
+        public DeleteAccountListPackageItemViewModel(
+            Package package, 
+            User userToDelete, 
+            User currentUser, 
+            IPackageService packageService)
+            : base(package, currentUser)
         {
-            get
-            {
-                return Packages == null ? false : _hasOrphanPackages.Value;
-            }
+            WillBeOrphaned = packageService.WillPackageBeOrphanedIfOwnerRemoved(package.PackageRegistration, userToDelete);
         }
+
+        public bool WillBeOrphaned { get; }
     }
 
     public interface IDeleteAccountViewModel
     {
         string AccountName { get; }
 
-        bool HasOrphanPackages { get; }
+        bool HasPackagesThatWillBeOrphaned { get; }
     }
 }

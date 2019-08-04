@@ -1,0 +1,38 @@
+{
+  "Features": {
+    "NuGetGallery.Typosquatting": "Enabled",
+    "NuGetGallery.PackagesAtomFeed": "Enabled"
+  },
+  "Flights": {
+    "NuGetGallery.TyposquattingFlight": {
+      "All": true,
+      "SiteAdmins": false,
+      "Accounts": [],
+      "Domains": []
+    },
+    "NuGetGallery.ManageDeprecation": {
+      "All": false,
+      "SiteAdmins": true,
+      "Accounts": [],
+      "Domains": []
+    },
+    "NuGetGallery.SearchSideBySide": {
+      "All": true,
+      "SiteAdmins": false,
+      "Accounts": [],
+      "Domains": []
+    },
+    "NuGetGallery.GitHubUsage": {
+      "All": false,
+      "SiteAdmins": false,
+      "Accounts": [],
+      "Domains": []
+    },
+    "NuGetGallery.ABTesting": {
+      "All": true,
+      "SiteAdmins": false,
+      "Accounts": [],
+      "Domains": []
+    }
+  }
+}

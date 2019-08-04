@@ -11,6 +11,7 @@ using System.Web.Http;
 using System.Web.Http.OData.Query;
 using System.Web.Http.Results;
 using Moq;
+using NuGet.Services.Entities;
 using NuGetGallery.Configuration;
 using NuGetGallery.OData;
 using NuGetGallery.WebApi;
@@ -25,22 +26,22 @@ namespace NuGetGallery.Controllers
 
         public class TheGetMethod
         {
-            private readonly CuratedFeed _curatedFeed;
             private readonly Package _curatedFeedPackage;
             private readonly Package _mainFeedPackage;
             private readonly FeatureConfiguration _featureConfiguration;
             private readonly Mock<IGalleryConfigurationService> _config;
             private readonly Mock<IAppConfiguration> _appConfig;
             private readonly Mock<ISearchService> _searchService;
-            private readonly Mock<ICuratedFeedService> _curatedFeedService;
-            private readonly Mock<IEntityRepository<Package>> _packages;
+            private readonly Mock<IReadOnlyEntityRepository<Package>> _packages;
+            private readonly Mock<ITelemetryService> _telemetryService;
             private readonly ODataV2CuratedFeedController _target;
             private readonly HttpRequestMessage _request;
             private readonly ODataQueryOptions<V2FeedPackage> _options;
+            private readonly Mock<IEntityRepository<Package>> _readWritePackages;
+            private readonly Mock<IFeatureFlagService> _featureFlagService;
 
             public TheGetMethod()
             {
-                _curatedFeed = new CuratedFeed { Name = _curatedFeedName };
                 _curatedFeedPackage = new Package
                 {
                     PackageRegistration = new PackageRegistration
@@ -60,8 +61,10 @@ namespace NuGetGallery.Controllers
 
                 _config = new Mock<IGalleryConfigurationService>();
                 _searchService = new Mock<ISearchService>();
-                _curatedFeedService = new Mock<ICuratedFeedService>();
-                _packages = new Mock<IEntityRepository<Package>>();
+                _packages = new Mock<IReadOnlyEntityRepository<Package>>();
+                _telemetryService = new Mock<ITelemetryService>();
+                _readWritePackages = new Mock<IEntityRepository<Package>>();
+                _featureFlagService = new Mock<IFeatureFlagService>();
 
                 _config
                     .Setup(x => x.Current)
@@ -72,21 +75,20 @@ namespace NuGetGallery.Controllers
                 _config
                     .Setup(x => x.GetSiteRoot(It.IsAny<bool>()))
                     .Returns(() => _siteRoot);
-                _curatedFeedService
-                    .Setup(x => x.GetFeedByName(_curatedFeedName))
-                    .Returns(() => _curatedFeed);
-                _curatedFeedService
-                    .Setup(x => x.GetPackages(_curatedFeedName))
-                    .Returns(() => new[] { _curatedFeedPackage }.AsQueryable());
                 _packages
                     .Setup(x => x.GetAll())
                     .Returns(() => new[] { _mainFeedPackage }.AsQueryable());
+                _featureFlagService
+                    .Setup(ff => ff.IsODataDatabaseReadOnlyEnabled())
+                    .Returns(true);
 
                 _target = new ODataV2CuratedFeedController(
                     _config.Object,
                     _searchService.Object,
-                    _curatedFeedService.Object,
-                    _packages.Object);
+                    _packages.Object,
+                    _readWritePackages.Object,
+                    _telemetryService.Object,
+                    _featureFlagService.Object);
 
                 _request = new HttpRequestMessage(HttpMethod.Get, $"{_siteRoot}/api/v2/curated-feed/{_curatedFeedName}/Packages");
                 _options = new ODataQueryOptions<V2FeedPackage>(CreateODataQueryContext<V2FeedPackage>(), _request);
@@ -105,8 +107,6 @@ namespace NuGetGallery.Controllers
                 var list = await GetPackageListAsync(actionResult);
                 var package = Assert.Single(list);
                 Assert.Equal(_mainFeedPackage.PackageRegistration.Id, package.Id);
-                _curatedFeedService.Verify(x => x.GetFeedByName(_curatedFeedName), Times.Never);
-                _curatedFeedService.Verify(x => x.GetPackages(It.IsAny<string>()), Times.Never);
                 _packages.Verify(x => x.GetAll(), Times.Once);
             }
 
@@ -116,45 +116,21 @@ namespace NuGetGallery.Controllers
                 _appConfig
                     .Setup(x => x.RedirectedCuratedFeeds)
                     .Returns(() => new[] { _curatedFeedName });
-                _curatedFeedService
-                    .Setup(x => x.GetFeedByName(It.IsAny<string>()))
-                    .Returns<CuratedFeed>(null);
 
                 var actionResult = _target.Get(_options, _curatedFeedName);
 
                 var list = await GetPackageListAsync(actionResult);
                 var package = Assert.Single(list);
                 Assert.Equal(_mainFeedPackage.PackageRegistration.Id, package.Id);
-                _curatedFeedService.Verify(x => x.GetFeedByName(_curatedFeedName), Times.Never);
-                _curatedFeedService.Verify(x => x.GetPackages(It.IsAny<string>()), Times.Never);
                 _packages.Verify(x => x.GetAll(), Times.Once);
             }
 
             [Fact]
-            public void MissingCuratedFeedReturnsNotFound()
+            public void NonRedirectCuratedFeedReturnsNotFound()
             {
-                _curatedFeedService
-                    .Setup(x => x.GetFeedByName(It.IsAny<string>()))
-                    .Returns<CuratedFeed>(null);
-
                 var actionResult = _target.Get(_options, _curatedFeedName);
 
                 Assert.IsType<NotFoundResult>(actionResult);
-                _curatedFeedService.Verify(x => x.GetFeedByName(_curatedFeedName), Times.Once);
-                _curatedFeedService.Verify(x => x.GetPackages(It.IsAny<string>()), Times.Never);
-                _packages.Verify(x => x.GetAll(), Times.Never);
-            }
-
-            [Fact]
-            public async Task NonRedirectCuratedFeedQueriesCuratedPackages()
-            {
-                var actionResult = _target.Get(_options, _curatedFeedName);
-
-                var list = await GetPackageListAsync(actionResult);
-                var package = Assert.Single(list);
-                Assert.Equal(_curatedFeedPackage.PackageRegistration.Id, package.Id);
-                _curatedFeedService.Verify(x => x.GetFeedByName(_curatedFeedName), Times.Once);
-                _curatedFeedService.Verify(x => x.GetPackages(It.IsAny<string>()), Times.Once);
                 _packages.Verify(x => x.GetAll(), Times.Never);
             }
 
@@ -471,22 +447,58 @@ namespace NuGetGallery.Controllers
             Assert.Equal(AvailablePackages.Where(p => !p.IsPrerelease).Count(), searchCount);
         }
 
-        protected override ODataV2CuratedFeedController CreateController(
-            IEntityRepository<Package> packagesRepository,
-            IGalleryConfigurationService configurationService,
-            ISearchService searchService)
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TestReadOnlyFeatureFlag(bool readOnly)
         {
-            var curatedFeed = new CuratedFeed { Name = _curatedFeedName };
+            var packagesRepositoryMock = new Mock<IReadOnlyEntityRepository<Package>>();
+            var readWritePackagesRepositoryMock = new Mock<IEntityRepository<Package>>();
+            var configurationService = new Mock<IGalleryConfigurationService>().Object;
+            var searchService = new Mock<ISearchService>().Object;
+            var telemetryService = new Mock<ITelemetryService>().Object;
+            var featureFlagServiceMock = new Mock<IFeatureFlagService>();
+            featureFlagServiceMock.Setup(ffs => ffs.IsODataDatabaseReadOnlyEnabled()).Returns(readOnly);
 
-            var curatedFeedServiceMock = new Mock<ICuratedFeedService>(MockBehavior.Strict);
-            curatedFeedServiceMock.Setup(m => m.GetPackages(_curatedFeedName)).Returns(AllPackages);
-            curatedFeedServiceMock.Setup(m => m.GetFeedByName(_curatedFeedName)).Returns(curatedFeed);
+            var testController = new ODataV2CuratedFeedController(
+                configurationService,
+                searchService,
+                packagesRepositoryMock.Object,
+                readWritePackagesRepositoryMock.Object,
+                telemetryService,
+                featureFlagServiceMock.Object);
+
+            var pacakges = testController.GetAll();
+
+            if (readOnly)
+            {
+                packagesRepositoryMock.Verify(r => r.GetAll(), times: Times.Exactly(1));
+                readWritePackagesRepositoryMock.Verify(r => r.GetAll(), times: Times.Never);
+            }
+            else
+            {
+                packagesRepositoryMock.Verify(r => r.GetAll(), times: Times.Never);
+                readWritePackagesRepositoryMock.Verify(r => r.GetAll(), times: Times.Exactly(1));
+            }
+        }
+
+        protected override ODataV2CuratedFeedController CreateController(
+            IReadOnlyEntityRepository<Package> packagesRepository,
+            IEntityRepository<Package> readWritePackagesRepository,
+            IGalleryConfigurationService configurationService,
+            ISearchService searchService,
+            ITelemetryService telemetryService,
+            IFeatureFlagService featureFlagService)
+        {
+            configurationService.Current.RedirectedCuratedFeeds = new[] { _curatedFeedName };
 
             return new ODataV2CuratedFeedController(
                 configurationService,
                 searchService,
-                curatedFeedServiceMock.Object,
-                packagesRepository);
+                packagesRepository,
+                readWritePackagesRepository,
+                telemetryService,
+                featureFlagService);
         }
 
         private static IDbSet<T> GetQueryableMockDbSet<T>(params T[] sourceList) where T : class

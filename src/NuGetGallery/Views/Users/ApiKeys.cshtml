@@ -1,7 +1,9 @@
-﻿@model ApiKeyListViewModel
+﻿@using Newtonsoft.Json
+@model ApiKeyListViewModel
 @using NuGetGallery.Authentication
 @{
     ViewBag.Title = "API Keys";
+    ViewBag.MdPageColumns = GalleryConstants.ColumnsFormMd;
 }
 
 <section role="main" class="container main-container page-api-keys">
@@ -462,7 +464,7 @@
 
 @section bottomScripts {
     <script type="text/javascript">
-        var initialData = @Html.Raw(Json.Encode(new
+        var initialData = @Html.Raw(JsonConvert.SerializeObject(new
                      {
                          ApiKeys = Model.ApiKeys,
                          PackageOwners = Model.PackageOwners,

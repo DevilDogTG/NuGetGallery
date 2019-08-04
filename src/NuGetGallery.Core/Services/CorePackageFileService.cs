@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using System.Web;
+using NuGet.Services.Entities;
 using NuGet.Versioning;
 
 namespace NuGetGallery
@@ -33,25 +34,25 @@ namespace NuGetGallery
                 throw new ArgumentNullException(nameof(packageFile));
             }
 
-            var fileName = BuildFileName(package, _metadata.FileSavePathTemplate, _metadata.FileExtension);
+            var fileName = FileNameHelper.BuildFileName(package, _metadata.FileSavePathTemplate, _metadata.FileExtension);
             return _fileStorageService.SaveFileAsync(_metadata.FileFolderName, fileName, packageFile, overwrite);
         }
 
         public Task<Stream> DownloadPackageFileAsync(Package package)
         {
-            var fileName = BuildFileName(package, _metadata.FileSavePathTemplate, _metadata.FileExtension);
+            var fileName = FileNameHelper.BuildFileName(package, _metadata.FileSavePathTemplate, _metadata.FileExtension);
             return _fileStorageService.GetFileAsync(_metadata.FileFolderName, fileName);
         }
 
         public Task<Uri> GetPackageReadUriAsync(Package package)
         {
-            var fileName = BuildFileName(package, _metadata.FileSavePathTemplate, _metadata.FileExtension);
+            var fileName = FileNameHelper.BuildFileName(package, _metadata.FileSavePathTemplate, _metadata.FileExtension);
             return _fileStorageService.GetFileReadUriAsync(_metadata.FileFolderName, fileName, endOfAccess: null);
         }
 
         public Task<bool> DoesPackageFileExistAsync(Package package)
         {
-            var fileName = BuildFileName(package, _metadata.FileSavePathTemplate, _metadata.FileExtension);
+            var fileName = FileNameHelper.BuildFileName(package, _metadata.FileSavePathTemplate, _metadata.FileExtension);
             return _fileStorageService.FileExistsAsync(_metadata.FileFolderName, fileName);
         }
 
@@ -62,7 +63,7 @@ namespace NuGetGallery
                 throw new ArgumentNullException(nameof(packageFile));
             }
 
-            var fileName = BuildFileName(
+            var fileName = FileNameHelper.BuildFileName(
                 package,
                 _metadata.FileSavePathTemplate,
                 _metadata.FileExtension);
@@ -76,7 +77,7 @@ namespace NuGetGallery
 
         public Task<Stream> DownloadValidationPackageFileAsync(Package package)
         {
-            var fileName = BuildFileName(
+            var fileName = FileNameHelper.BuildFileName(
                 package,
                 _metadata.FileSavePathTemplate,
                 _metadata.FileExtension);
@@ -92,7 +93,7 @@ namespace NuGetGallery
             }
 
             var normalizedVersion = NuGetVersionFormatter.Normalize(version);
-            var fileName = BuildFileName(
+            var fileName = FileNameHelper.BuildFileName(
                 id,
                 normalizedVersion,
                 _metadata.FileSavePathTemplate,
@@ -115,7 +116,7 @@ namespace NuGetGallery
 
             var normalizedVersion = NuGetVersionFormatter.Normalize(version);
 
-            var fileName = BuildFileName(id, normalizedVersion, _metadata.FileSavePathTemplate, _metadata.FileExtension);
+            var fileName = FileNameHelper.BuildFileName(id, normalizedVersion, _metadata.FileSavePathTemplate, _metadata.FileExtension);
             return _fileStorageService.DeleteFileAsync(_metadata.FileFolderName, fileName);
         }
 
@@ -123,7 +124,7 @@ namespace NuGetGallery
         {
             package = package ?? throw new ArgumentNullException(nameof(package));
 
-            var fileName = BuildFileName(
+            var fileName = FileNameHelper.BuildFileName(
                 package,
                 _metadata.FileSavePathTemplate,
                 _metadata.FileExtension);
@@ -133,7 +134,7 @@ namespace NuGetGallery
 
         public Task<bool> DoesValidationPackageFileExistAsync(Package package)
         {
-            var fileName = BuildFileName(package, _metadata.FileSavePathTemplate, _metadata.FileExtension);
+            var fileName = FileNameHelper.BuildFileName(package, _metadata.FileSavePathTemplate, _metadata.FileExtension);
             return _fileStorageService.FileExistsAsync(_metadata.ValidationFolderName, fileName);
         }
 
@@ -223,52 +224,6 @@ namespace NuGetGallery
                 id.ToLowerInvariant(),
                 version.ToLowerInvariant(),
                 HttpServerUtility.UrlTokenEncode(hashBytes),
-                extension);
-        }
-
-        protected static string BuildFileName(Package package, string format, string extension)
-        {
-            if (package == null)
-            {
-                throw new ArgumentNullException(nameof(package));
-            }
-
-            if (package.PackageRegistration == null ||
-                String.IsNullOrWhiteSpace(package.PackageRegistration.Id) ||
-                (String.IsNullOrWhiteSpace(package.NormalizedVersion) && String.IsNullOrWhiteSpace(package.Version)))
-            {
-                throw new ArgumentException(CoreStrings.PackageIsMissingRequiredData, nameof(package));
-            }
-
-            return BuildFileName(
-                package.PackageRegistration.Id,
-                string.IsNullOrEmpty(package.NormalizedVersion) ?
-                    NuGetVersionFormatter.Normalize(package.Version) :
-                    package.NormalizedVersion, format, extension);
-        }
-
-        protected static string BuildFileName(string id, string version, string pathTemplate, string extension)
-        {
-            if (id == null)
-            {
-                throw new ArgumentNullException(nameof(id));
-            }
-
-            if (version == null)
-            {
-                throw new ArgumentNullException(nameof(version));
-            }
-
-            // Note: packages should be saved and retrieved in blob storage using the lower case version of their filename because
-            // a) package IDs can and did change case over time
-            // b) blob storage is case sensitive
-            // c) we don't want to hit the database just to look up the right case
-            // and remember - version can contain letters too.
-            return String.Format(
-                CultureInfo.InvariantCulture,
-                pathTemplate,
-                id.ToLowerInvariant(),
-                version.ToLowerInvariant(),
                 extension);
         }
     }

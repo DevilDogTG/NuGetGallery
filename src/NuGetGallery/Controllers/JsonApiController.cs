@@ -8,11 +8,11 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 using System.Web.Mvc;
+using NuGet.Services.Entities;
+using NuGet.Services.Messaging.Email;
 using NuGetGallery.Configuration;
 using NuGetGallery.Filters;
-using NuGetGallery.Infrastructure.Mail;
 using NuGetGallery.Infrastructure.Mail.Messages;
-using NuGetGallery.Security;
 
 namespace NuGetGallery
 {
@@ -24,7 +24,6 @@ namespace NuGetGallery
         private readonly IPackageService _packageService;
         private readonly IUserService _userService;
         private readonly IAppConfiguration _appConfiguration;
-        private readonly ISecurityPolicyService _policyService;
         private readonly IPackageOwnershipManagementService _packageOwnershipManagementService;
 
         public JsonApiController(
@@ -32,36 +31,32 @@ namespace NuGetGallery
             IUserService userService,
             IMessageService messageService,
             IAppConfiguration appConfiguration,
-            ISecurityPolicyService policyService,
             IPackageOwnershipManagementService packageOwnershipManagementService)
         {
-            _packageService = packageService;
-            _userService = userService;
-            _messageService = messageService;
-            _appConfiguration = appConfiguration;
-            _policyService = policyService;
-            _packageOwnershipManagementService = packageOwnershipManagementService;
+            _packageService = packageService ?? throw new ArgumentNullException(nameof(packageService));
+            _userService = userService ?? throw new ArgumentNullException(nameof(userService));
+            _messageService = messageService ?? throw new ArgumentNullException(nameof(messageService));
+            _appConfiguration = appConfiguration ?? throw new ArgumentNullException(nameof(appConfiguration));
+            _packageOwnershipManagementService = packageOwnershipManagementService ?? throw new ArgumentNullException(nameof(packageOwnershipManagementService));
         }
 
         [HttpGet]
-        public virtual ActionResult GetPackageOwners(string id, string version)
+        public virtual ActionResult GetPackageOwners(string id)
         {
-            var package = _packageService.FindPackageByIdAndVersion(id, version);
-            if (package == null)
+            var registration = _packageService.FindPackageRegistrationById(id);
+            if (registration == null)
             {
                 return Json(new { message = Strings.AddOwner_PackageNotFound });
             }
 
             var currentUser = GetCurrentUser();
-            if (ActionsRequiringPermissions.ManagePackageOwnership.CheckPermissionsOnBehalfOfAnyAccount(currentUser, package) != PermissionsCheckResult.Allowed)
+            if (ActionsRequiringPermissions.ManagePackageOwnership.CheckPermissionsOnBehalfOfAnyAccount(currentUser, registration) != PermissionsCheckResult.Allowed)
             {
                 return new HttpUnauthorizedResult();
             }
 
-            var packageRegistration = package.PackageRegistration;
-            var packageRegistrationOwners = package.PackageRegistration.Owners;
-            var allMatchingNamespaceOwners = package
-                .PackageRegistration
+            var packageRegistrationOwners = registration.Owners;
+            var allMatchingNamespaceOwners = registration
                 .ReservedNamespaces
                 .SelectMany(rn => rn.Owners)
                 .Distinct();
@@ -74,7 +69,7 @@ namespace NuGetGallery
                 .Select(u => new PackageOwnersResultViewModel(
                     u,
                     currentUser,
-                    packageRegistration,
+                    registration,
                     Url,
                     isPending: false,
                     isNamespaceOwner: true));
@@ -84,7 +79,7 @@ namespace NuGetGallery
                 .Select(u => new PackageOwnersResultViewModel(
                     u,
                     currentUser,
-                    packageRegistration,
+                    registration,
                     Url,
                     isPending: false,
                     isNamespaceOwner: false));
@@ -92,11 +87,11 @@ namespace NuGetGallery
             owners = owners.Union(packageOwnersOnlyResultViewModel);
 
             var pending =
-                _packageOwnershipManagementService.GetPackageOwnershipRequests(package: package.PackageRegistration)
+                _packageOwnershipManagementService.GetPackageOwnershipRequests(package: registration)
                 .Select(r => new PackageOwnersResultViewModel(
                     r.NewOwner,
                     currentUser,
-                    packageRegistration,
+                    registration,
                     Url,
                     isPending: true,
                     isNamespaceOwner: false));
@@ -108,9 +103,13 @@ namespace NuGetGallery
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<JsonResult> AddPackageOwner(string id, string username, string message)
+        public async Task<JsonResult> AddPackageOwner(AddPackageOwnerViewModel addOwnerData)
         {
-            if (Regex.IsMatch(username, Constants.EmailValidationRegex, RegexOptions.None, Constants.EmailValidationRegexTimeout))
+            string id = addOwnerData.Id;
+            string username = addOwnerData.Username;
+            string message = addOwnerData.Message;
+
+            if (Regex.IsMatch(username, GalleryConstants.EmailValidationRegex, RegexOptions.None, GalleryConstants.EmailValidationRegexTimeout))
             {
                 return Json(new { success = false, message = Strings.AddOwner_NameIsEmail }, JsonRequestBehavior.AllowGet);
             }
@@ -164,6 +163,7 @@ namespace NuGetGallery
                         rejectionUrl,
                         encodedMessage,
                         string.Empty);
+
                     await _messageService.SendMessageAsync(packageOwnershipRequestMessage);
 
                     foreach (var owner in model.Package.Owners)
@@ -205,10 +205,10 @@ namespace NuGetGallery
                 {
                     if (model.Package.Owners.Count == 1 && model.User == model.Package.Owners.Single())
                     {
-                        throw new InvalidOperationException("You can't remove the only owner from a package.");
+                        return Json(new { success = false, message = "You can't remove the only owner from a package." }, JsonRequestBehavior.AllowGet);
                     }
 
-                    await _packageOwnershipManagementService.RemovePackageOwnerAsync(model.Package, model.CurrentUser, model.User, commitAsTransaction: true);
+                    await _packageOwnershipManagementService.RemovePackageOwnerAsync(model.Package, model.CurrentUser, model.User, commitChanges: true);
 
                     var emailMessage = new PackageOwnerRemovedMessage(_appConfiguration, model.CurrentUser, model.User, model.Package);
                     await _messageService.SendMessageAsync(emailMessage);

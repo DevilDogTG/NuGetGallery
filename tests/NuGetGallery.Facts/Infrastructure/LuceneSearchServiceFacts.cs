@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Lucene.Net.Store;
 using Moq;
+using NuGet.Services.Entities;
 using NuGetGallery.OData;
 using Xunit;
 
@@ -674,14 +675,8 @@ namespace NuGetGallery.Infrastructure
                 .Setup(m => m.GetAll())
                 .Returns(packages.AsQueryable());
 
-            var mockCuratedPackageSource = new Mock<IEntityRepository<CuratedPackage>>();
-            mockCuratedPackageSource
-                .Setup(m => m.GetAll())
-                .Returns(Enumerable.Empty<CuratedPackage>().AsQueryable());
-
             var luceneIndexingService = new LuceneIndexingService(
                 mockPackageSource.Object,
-                mockCuratedPackageSource.Object,
                 d,
                 null,
                 null);

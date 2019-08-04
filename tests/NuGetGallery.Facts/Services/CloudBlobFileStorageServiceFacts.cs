@@ -26,7 +26,8 @@ namespace NuGetGallery
 
         private static CloudBlobFileStorageService CreateService(
             Mock<ICloudBlobClient> fakeBlobClient = null,
-            Mock<ISourceDestinationRedirectPolicy> redirectPolicy = null)
+            Mock<ISourceDestinationRedirectPolicy> redirectPolicy = null,
+            Mock<ICloudBlobContainerInformationProvider> folderInformationProvider = null)
         {
             if (fakeBlobClient == null)
             {
@@ -39,11 +40,20 @@ namespace NuGetGallery
                 redirectPolicy.Setup(p => p.IsAllowed(It.IsAny<Uri>(), It.IsAny<Uri>())).Returns(true);
             }
 
+            if (folderInformationProvider == null)
+            {
+                folderInformationProvider = new Mock<ICloudBlobContainerInformationProvider>();
+                folderInformationProvider
+                    .Setup(fip => fip.IsPublicContainer(It.IsAny<string>()))
+                    .Returns(false);
+            }
+
             return new CloudBlobFileStorageService(
                 fakeBlobClient.Object,
                 Mock.Of<IAppConfiguration>(),
                 redirectPolicy.Object,
-                Mock.Of<IDiagnosticsService>());
+                Mock.Of<IDiagnosticsService>(),
+                folderInformationProvider.Object);
         }
 
         private class FolderNamesDataAttribute : DataAttribute
@@ -59,8 +69,8 @@ namespace NuGetGallery
             {
                 var folderNames = new List<object[]>
                     {
-                        new object[] { CoreConstants.PackagesFolderName, true },
-                        new object[] { CoreConstants.UploadsFolderName, false }
+                        new object[] { CoreConstants.Folders.PackagesFolderName, true },
+                        new object[] { CoreConstants.Folders.UploadsFolderName, false }
                     };
 
                 if (!IncludePermissions)
@@ -124,7 +134,7 @@ namespace NuGetGallery
                 fakeBlob.Setup(x => x.Uri).Returns(new Uri(requestUri.Scheme + "://theUri"));
                 var service = CreateService(fakeBlobClient: fakeBlobClient);
 
-                var result = await service.CreateDownloadFileActionResultAsync(requestUri, CoreConstants.PackagesFolderName, "theFileName") as RedirectResult;
+                var result = await service.CreateDownloadFileActionResultAsync(requestUri, CoreConstants.Folders.PackagesFolderName, "theFileName") as RedirectResult;
 
                 Assert.NotNull(result);
                 Assert.Equal(scheme + "theuri/", result.Url);
@@ -146,7 +156,7 @@ namespace NuGetGallery
                 fakeBlob.Setup(x => x.Uri).Returns(new Uri(blobUrl));
                 var service = CreateService(fakeBlobClient: fakeBlobClient);
 
-                var result = await service.CreateDownloadFileActionResultAsync(new Uri(requestUrl), CoreConstants.PackagesFolderName, "theFileName") as RedirectResult;
+                var result = await service.CreateDownloadFileActionResultAsync(new Uri(requestUrl), CoreConstants.Folders.PackagesFolderName, "theFileName") as RedirectResult;
                 var redirectUrl = new Uri(result.Url);
                 Assert.Equal(expectedPort, redirectUrl.Port);
             }
@@ -168,7 +178,7 @@ namespace NuGetGallery
 
                 var result = await service.CreateDownloadFileActionResultAsync(
                     new Uri(HttpsRequestUrlString), 
-                    CoreConstants.PackagesFolderName, 
+                    CoreConstants.Folders.PackagesFolderName, 
                     "theFileName") as RedirectResult;
                 fakePolicy.Verify();
             }
@@ -191,7 +201,7 @@ namespace NuGetGallery
                 await Assert.ThrowsAsync<InvalidOperationException>(
                     () => service.CreateDownloadFileActionResultAsync(
                         new Uri(HttpsRequestUrlString), 
-                        CoreConstants.PackagesFolderName, "theFileName")
+                        CoreConstants.Folders.PackagesFolderName, "theFileName")
                     );
             }
         }

@@ -51,7 +51,8 @@ namespace NuGetGallery.Packaging
             IEnumerable<FrameworkSpecificGroup> frameworkGroups,
             IEnumerable<NuGet.Packaging.Core.PackageType> packageTypes,
             NuGetVersion minClientVersion,
-            RepositoryMetadata repositoryMetadata)
+            RepositoryMetadata repositoryMetadata,
+            LicenseMetadata licenseMetadata = null)
         {
             _metadata = new Dictionary<string, string>(metadata, StringComparer.OrdinalIgnoreCase);
             _dependencyGroups = dependencyGroups.ToList().AsReadOnly();
@@ -67,6 +68,8 @@ namespace NuGetGallery.Packaging
                 RepositoryUrl = repoUrl;
                 RepositoryType = repositoryMetadata.Type;
             }
+
+            LicenseMetadata = licenseMetadata;
         }
 
         private void SetPropertiesFromMetadata()
@@ -92,6 +95,7 @@ namespace NuGetGallery.Packaging
             Description = GetValue(PackageMetadataStrings.Description, (string)null);
             ReleaseNotes = GetValue(PackageMetadataStrings.ReleaseNotes, (string)null);
             RequireLicenseAcceptance = GetValue(PackageMetadataStrings.RequireLicenseAcceptance, false);
+            DevelopmentDependency = GetValue(PackageMetadataStrings.DevelopmentDependency, false);
             Summary = GetValue(PackageMetadataStrings.Summary, (string)null);
             Title = GetValue(PackageMetadataStrings.Title, (string)null);
             Tags = GetValue(PackageMetadataStrings.Tags, (string)null);
@@ -115,6 +119,7 @@ namespace NuGetGallery.Packaging
         public string Description { get; private set; }
         public string ReleaseNotes { get; private set; }
         public bool RequireLicenseAcceptance { get; private set; }
+        public bool DevelopmentDependency { get; private set; }
         public string Summary { get; private set; }
         public string Title { get; private set; }
         public string Tags { get; private set; }
@@ -122,6 +127,12 @@ namespace NuGetGallery.Packaging
         public string Owners { get; private set; }
         public string Language { get; private set; }
         public NuGetVersion MinClientVersion { get; set; }
+
+        /// <summary>
+        /// Contains license metadata taken from the 'license' node of the nuspec file.
+        /// Null if no 'license' node present.
+        /// </summary>
+        public LicenseMetadata LicenseMetadata { get; }
 
         public string GetValueFromMetadata(string key)
         {
@@ -244,7 +255,8 @@ namespace NuGetGallery.Packaging
                 nuspecReader.GetFrameworkReferenceGroups(),
                 nuspecReader.GetPackageTypes(),
                 nuspecReader.GetMinClientVersion(),
-                nuspecReader.GetRepositoryMetadata());
+                nuspecReader.GetRepositoryMetadata(),
+                nuspecReader.GetLicenseMetadata());
         }
 
         private class StrictNuspecReader : NuspecReader

@@ -3,27 +3,25 @@
 
 using System.Data.Entity;
 using System.Threading.Tasks;
+using NuGet.Services.Entities;
 
 namespace NuGetGallery
 {
-    public interface IEntitiesContext
+    public interface IEntitiesContext : IReadOnlyEntitiesContext
     {
-        IDbSet<Certificate> Certificates { get; set; }
-        IDbSet<CuratedFeed> CuratedFeeds { get; set; }
-        IDbSet<CuratedPackage> CuratedPackages { get; set; }
-        IDbSet<PackageRegistration> PackageRegistrations { get; set; }
-        IDbSet<Credential> Credentials { get; set; }
-        IDbSet<Scope> Scopes { get; set; }
-        IDbSet<User> Users { get; set; }
-        IDbSet<UserSecurityPolicy> UserSecurityPolicies { get; set; }
-        IDbSet<ReservedNamespace> ReservedNamespaces { get; set; }
-        IDbSet<UserCertificate> UserCertificates { get; set; }
-        IDbSet<SymbolPackage> SymbolPackages { get; set; }
+        DbSet<Certificate> Certificates { get; set; }
+        DbSet<PackageDeprecation> Deprecations { get; set; }
+        DbSet<PackageRegistration> PackageRegistrations { get; set; }
+        DbSet<Credential> Credentials { get; set; }
+        DbSet<Scope> Scopes { get; set; }
+        DbSet<User> Users { get; set; }
+        DbSet<UserSecurityPolicy> UserSecurityPolicies { get; set; }
+        DbSet<ReservedNamespace> ReservedNamespaces { get; set; }
+        DbSet<UserCertificate> UserCertificates { get; set; }
+        DbSet<SymbolPackage> SymbolPackages { get; set; }
 
         Task<int> SaveChangesAsync();
-        IDbSet<T> Set<T>() where T : class;
         void DeleteOnCommit<T>(T entity) where T : class;
-        void SetCommandTimeout(int? seconds);
         IDatabase GetDatabase();
     }
 }

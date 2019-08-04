@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Threading.Tasks;
+using NuGet.Services.Entities;
 
 namespace NuGetGallery
 {
@@ -12,6 +13,9 @@ namespace NuGetGallery
     public class ImmediatePackageValidator<TPackageEntity> : IPackageValidationInitiator<TPackageEntity> 
         where TPackageEntity: IPackageEntity
     {
+        public PackageStatus GetPackageStatus(TPackageEntity package)
+            => PackageStatus.Available;
+
         public Task<PackageStatus> StartValidationAsync(TPackageEntity package)
         {
             return Task.FromResult(PackageStatus.Available);

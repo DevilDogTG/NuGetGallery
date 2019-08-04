@@ -19,7 +19,7 @@ namespace NuGetGallery
     public class CloudBlobCoreFileStorageService : ICoreFileStorageService
     {
         /// <summary>
-        /// This is the maximum duration for <see cref="CopyFileAsync(string, string, string, string)"/> to poll,
+        /// This is the maximum duration for <see cref="CopyFileAsync(ISimpleCloudBlob, string, string, IAccessCondition)"/> to poll,
         /// waiting for a package copy to complete. The value picked today is based off of the maximum duration we wait
         /// when uploading files to Azure China blob storage. Note that in cases when the copy source and destination
         /// are in the same container, the copy completed immediately and no polling is necessary.
@@ -27,32 +27,19 @@ namespace NuGetGallery
         private static readonly TimeSpan MaxCopyDuration = TimeSpan.FromMinutes(10);
         private static readonly TimeSpan CopyPollFrequency = TimeSpan.FromMilliseconds(500);
 
-        private static readonly HashSet<string> KnownPublicFolders = new HashSet<string> {
-            CoreConstants.PackagesFolderName,
-            CoreConstants.PackageBackupsFolderName,
-            CoreConstants.DownloadsFolderName,
-            CoreConstants.SymbolPackagesFolderName,
-            CoreConstants.SymbolPackageBackupsFolderName
-        };
-
-        private static readonly HashSet<string> KnownPrivateFolders = new HashSet<string> {
-            CoreConstants.ContentFolderName,
-            CoreConstants.UploadsFolderName,
-            CoreConstants.PackageReadMesFolderName,
-            CoreConstants.ValidationFolderName,
-            CoreConstants.UserCertificatesFolderName,
-            CoreConstants.RevalidationFolderName,
-            CoreConstants.StatusFolderName,
-        };
-
         protected readonly ICloudBlobClient _client;
         protected readonly IDiagnosticsSource _trace;
+        protected readonly ICloudBlobContainerInformationProvider _cloudBlobFolderInformationProvider;
         protected readonly ConcurrentDictionary<string, ICloudBlobContainer> _containers = new ConcurrentDictionary<string, ICloudBlobContainer>();
 
-        public CloudBlobCoreFileStorageService(ICloudBlobClient client, IDiagnosticsService diagnosticsService)
+        public CloudBlobCoreFileStorageService(
+            ICloudBlobClient client,
+            IDiagnosticsService diagnosticsService,
+            ICloudBlobContainerInformationProvider cloudBlobFolderInformationProvider)
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
             _trace = diagnosticsService?.SafeGetSource(nameof(CloudBlobCoreFileStorageService)) ?? throw new ArgumentNullException(nameof(diagnosticsService));
+            _cloudBlobFolderInformationProvider = cloudBlobFolderInformationProvider ?? throw new ArgumentNullException(nameof(cloudBlobFolderInformationProvider));
         }
 
         public async Task DeleteFileAsync(string folderName, string fileName)
@@ -71,12 +58,12 @@ namespace NuGetGallery
 
         public async Task<Stream> GetFileAsync(string folderName, string fileName)
         {
-            if (String.IsNullOrWhiteSpace(folderName))
+            if (string.IsNullOrWhiteSpace(folderName))
             {
                 throw new ArgumentNullException(nameof(folderName));
             }
 
-            if (String.IsNullOrWhiteSpace(fileName))
+            if (string.IsNullOrWhiteSpace(fileName))
             {
                 throw new ArgumentNullException(nameof(fileName));
             }
@@ -86,12 +73,12 @@ namespace NuGetGallery
 
         public async Task<IFileReference> GetFileReferenceAsync(string folderName, string fileName, string ifNoneMatch = null)
         {
-            if (String.IsNullOrWhiteSpace(folderName))
+            if (string.IsNullOrWhiteSpace(folderName))
             {
                 throw new ArgumentNullException(nameof(folderName));
             }
 
-            if (String.IsNullOrWhiteSpace(fileName))
+            if (string.IsNullOrWhiteSpace(fileName))
             {
                 throw new ArgumentNullException(nameof(fileName));
             }
@@ -243,7 +230,7 @@ namespace NuGetGallery
             catch (StorageException ex) when (ex.IsFileAlreadyExistsException())
             {
                 throw new FileAlreadyExistsException(
-                    String.Format(
+                    string.Format(
                         CultureInfo.CurrentCulture,
                         "There is already a blob with name {0} in container {1}.",
                         destFileName,
@@ -293,8 +280,19 @@ namespace NuGetGallery
             return "(none)";
         }
 
-        public async Task SaveFileAsync(string folderName, string fileName, Stream file, bool overwrite = true)
+        public Task SaveFileAsync(string folderName, string fileName, Stream file, bool overwrite = true)
         {
+            var contentType = GetContentType(folderName);
+            return SaveFileAsync(folderName, fileName, contentType, file, overwrite);
+        }
+
+        public async Task SaveFileAsync(string folderName, string fileName, string contentType, Stream file, bool overwrite = true)
+        {
+            if (contentType == null)
+            {
+                throw new ArgumentNullException(nameof(contentType));
+            }
+
             ICloudBlobContainer container = await GetContainerAsync(folderName);
             var blob = container.GetBlobReference(fileName);
 
@@ -305,7 +303,7 @@ namespace NuGetGallery
             catch (StorageException ex) when (ex.IsFileAlreadyExistsException())
             {
                 throw new FileAlreadyExistsException(
-                    String.Format(
+                    string.Format(
                         CultureInfo.CurrentCulture,
                         "There is already a blob with name {0} in container {1}.",
                         fileName,
@@ -313,7 +311,7 @@ namespace NuGetGallery
                     ex);
             }
 
-            blob.Properties.ContentType = GetContentType(folderName);
+            blob.Properties.ContentType = contentType;
             blob.Properties.CacheControl = GetCacheControl(folderName);
             await blob.SetPropertiesAsync();
         }
@@ -338,7 +336,7 @@ namespace NuGetGallery
             catch (StorageException ex) when (ex.IsFileAlreadyExistsException())
             {
                 throw new FileAlreadyExistsException(
-                    String.Format(
+                    string.Format(
                         CultureInfo.CurrentCulture,
                         "There is already a blob with name {0} in container {1}.",
                         fileName,
@@ -426,6 +424,76 @@ namespace NuGetGallery
             }
         }
 
+        /// <summary>
+        /// Asynchronously sets blob properties.
+        /// </summary>
+        /// <param name="folderName">The folder (container) name.</param>
+        /// <param name="fileName">The blob file name.</param>
+        /// <param name="updatePropertiesAsync">A function which updates blob properties and returns <c>true</c>
+        /// for changes to be persisted or <c>false</c> for changes to be discarded.</param>
+        /// <returns>A task that represents the asynchronous operation.</returns>
+        public async Task SetPropertiesAsync(
+            string folderName,
+            string fileName,
+            Func<Lazy<Task<Stream>>, BlobProperties, Task<bool>> updatePropertiesAsync)
+        {
+            if (folderName == null)
+            {
+                throw new ArgumentNullException(nameof(folderName));
+            }
+
+            if (fileName == null)
+            {
+                throw new ArgumentNullException(nameof(fileName));
+            }
+
+            if (updatePropertiesAsync == null)
+            {
+                throw new ArgumentNullException(nameof(updatePropertiesAsync));
+            }
+
+            var container = await GetContainerAsync(folderName);
+            var blob = container.GetBlobReference(fileName);
+
+            await blob.FetchAttributesAsync();
+
+            var lazyStream = new Lazy<Task<Stream>>(() => GetFileAsync(folderName, fileName));
+            var wasUpdated = await updatePropertiesAsync(lazyStream, blob.Properties);
+
+            if (wasUpdated)
+            {
+                var accessCondition = AccessConditionWrapper.GenerateIfMatchCondition(blob.ETag);
+                var mappedAccessCondition = new AccessCondition
+                {
+                    IfNoneMatchETag = accessCondition.IfNoneMatchETag,
+                    IfMatchETag = accessCondition.IfMatchETag
+                };
+
+                await blob.SetPropertiesAsync(mappedAccessCondition);
+            }
+        }
+
+        public async Task<string> GetETagOrNullAsync(
+            string folderName,
+            string fileName)
+        {
+            folderName = folderName ?? throw new ArgumentNullException(nameof(folderName));
+            fileName = fileName ?? throw new ArgumentNullException(nameof(fileName));
+
+            var container = await GetContainerAsync(folderName);
+            var blob = container.GetBlobReference(fileName);
+            try
+            {
+                await blob.FetchAttributesAsync();
+                return blob.ETag;
+            }
+            // In case that the blob does not exist return null.
+            catch (StorageException)
+            {
+                return null;
+            }
+        }
+
         private static SharedAccessBlobPermissions MapFileUriPermissions(FileUriPermissions permissions)
         {
             return (SharedAccessBlobPermissions)permissions;
@@ -465,18 +533,7 @@ namespace NuGetGallery
 
         private bool IsPublicContainer(string folderName)
         {
-            if (KnownPublicFolders.Contains(folderName))
-            {
-                return true;
-            }
-
-            if (KnownPrivateFolders.Contains(folderName))
-            {
-                return false;
-            }
-
-            throw new InvalidOperationException(
-                String.Format(CultureInfo.CurrentCulture, "The folder name {0} is not supported.", folderName));
+            return _cloudBlobFolderInformationProvider.IsPublicContainer(folderName);
         }
 
         private async Task<StorageResult> GetBlobContentAsync(string folderName, string fileName, string ifNoneMatch = null)
@@ -528,62 +585,14 @@ namespace NuGetGallery
             return new StorageResult(HttpStatusCode.OK, stream, blob.ETag);
         }
 
-        private static string GetContentType(string folderName)
+        private string GetContentType(string folderName)
         {
-            switch (folderName)
-            {
-                case CoreConstants.PackagesFolderName:
-                case CoreConstants.PackageBackupsFolderName:
-                case CoreConstants.UploadsFolderName:
-                case CoreConstants.ValidationFolderName:
-                case CoreConstants.SymbolPackagesFolderName:
-                case CoreConstants.SymbolPackageBackupsFolderName:
-                    return CoreConstants.PackageContentType;
-
-                case CoreConstants.DownloadsFolderName:
-                    return CoreConstants.OctetStreamContentType;
-
-                case CoreConstants.PackageReadMesFolderName:
-                    return CoreConstants.TextContentType;
-
-                case CoreConstants.ContentFolderName:
-                case CoreConstants.RevalidationFolderName:
-                case CoreConstants.StatusFolderName:
-                    return CoreConstants.JsonContentType;
-
-                case CoreConstants.UserCertificatesFolderName:
-                    return CoreConstants.CertificateContentType;
-
-                default:
-                    throw new InvalidOperationException(
-                        String.Format(CultureInfo.CurrentCulture, "The folder name {0} is not supported.", folderName));
-            }
+            return _cloudBlobFolderInformationProvider.GetContentType(folderName);
         }
 
-        private static string GetCacheControl(string folderName)
+        private string GetCacheControl(string folderName)
         {
-            switch (folderName)
-            {
-                case CoreConstants.PackagesFolderName:
-                case CoreConstants.SymbolPackagesFolderName:
-                    return CoreConstants.DefaultCacheControl;
-
-                case CoreConstants.PackageBackupsFolderName:
-                case CoreConstants.UploadsFolderName:
-                case CoreConstants.ValidationFolderName:
-                case CoreConstants.SymbolPackageBackupsFolderName:
-                case CoreConstants.DownloadsFolderName:
-                case CoreConstants.PackageReadMesFolderName:
-                case CoreConstants.ContentFolderName:
-                case CoreConstants.RevalidationFolderName:
-                case CoreConstants.StatusFolderName:
-                case CoreConstants.UserCertificatesFolderName:
-                    return null;
-
-                default:
-                    throw new InvalidOperationException(
-                        String.Format(CultureInfo.CurrentCulture, "The folder name {0} is not supported.", folderName));
-            }
+            return _cloudBlobFolderInformationProvider.GetCacheControl(folderName);
         }
 
         private async Task<ICloudBlobContainer> PrepareContainer(string folderName, bool isPublic)

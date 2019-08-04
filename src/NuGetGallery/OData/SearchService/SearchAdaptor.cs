@@ -10,8 +10,9 @@ using System.Threading.Tasks;
 using System.Web;
 using System.Web.Http.OData.Query;
 using System.Web.Routing;
-using NuGet.Services.Search.Models;
-using NuGetGallery.Infrastructure.Lucene;
+using NuGet.Services.Entities;
+using NuGetGallery.Infrastructure.Search;
+using NuGetGallery.Infrastructure.Search.Models;
 using NuGetGallery.OData.QueryFilter;
 using NuGetGallery.OData.QueryInterceptors;
 using QueryInterceptor;
@@ -30,19 +31,19 @@ namespace NuGetGallery.OData
             var searchFilter = new SearchFilter(context)
             {
                 SearchTerm = q,
-                Skip = (page - 1) * Constants.DefaultPackageListPageSize, // pages are 1-based. 
-                Take = Constants.DefaultPackageListPageSize,
+                Skip = (page - 1) * GalleryConstants.DefaultPackageListPageSize, // pages are 1-based. 
+                Take = GalleryConstants.DefaultPackageListPageSize,
                 IncludePrerelease = includePrerelease,
                 SemVerLevel = semVerLevel
             };
 
             switch (sortOrder)
             {
-                case Constants.AlphabeticSortOrder:
+                case GalleryConstants.AlphabeticSortOrder:
                     searchFilter.SortOrder = SortOrder.TitleAscending;
                     break;
 
-                case Constants.RecentSortOrder:
+                case GalleryConstants.RecentSortOrder:
                     searchFilter.SortOrder = SortOrder.Published;
                     break;
 
@@ -54,19 +55,17 @@ namespace NuGetGallery.OData
             return searchFilter;
         }
 
-        private static async Task<IQueryable<Package>> GetResultsFromSearchService(ISearchService searchService, SearchFilter searchFilter)
+        private static async Task<SearchResults> GetResultsFromSearchService(ISearchService searchService, SearchFilter searchFilter)
         {
-            var result = await searchService.Search(searchFilter);
-            return FormatResults(searchFilter, result);
+            return await searchService.Search(searchFilter);
         }
 
-        private static async Task<IQueryable<Package>> GetRawResultsFromSearchService(ISearchService searchService, SearchFilter searchFilter)
+        private static async Task<SearchResults> GetRawResultsFromSearchService(ISearchService searchService, SearchFilter searchFilter)
         {
             var externalSearchService = searchService as ExternalSearchService;
             if (externalSearchService != null)
             {
-                var result = await externalSearchService.RawSearch(searchFilter);
-                return FormatResults(searchFilter, result);
+                return await externalSearchService.RawSearch(searchFilter);
             }
 
             return await GetResultsFromSearchService(searchService, searchFilter);
@@ -95,7 +94,6 @@ namespace NuGetGallery.OData
                    IQueryable<Package> packages,
                    string id,
                    string version,
-                   CuratedFeed curatedFeed,
                    string semVerLevel)
         {
             SearchFilter searchFilter;
@@ -117,13 +115,15 @@ namespace NuGetGallery.OData
                 searchFilter.SearchTerm = searchTerm;
                 searchFilter.SemVerLevel = semVerLevel;
                 searchFilter.IncludePrerelease = true;
-                searchFilter.CuratedFeed = curatedFeed;
                 searchFilter.SupportedFramework = null;
                 searchFilter.IncludeAllVersions = true;
 
                 var results = await GetRawResultsFromSearchService(searchService, searchFilter);
 
-                return new SearchAdaptorResult(true, results);
+                if (SearchResults.IsSuccessful(results))
+                {
+                    return new SearchAdaptorResult(true, FormatResults(searchFilter, results));
+                }
             }
 
             return new SearchAdaptorResult(false, packages);
@@ -136,7 +136,6 @@ namespace NuGetGallery.OData
             string searchTerm, 
             string targetFramework, 
             bool includePrerelease,
-            CuratedFeed curatedFeed,
             string semVerLevel)
         {
             SearchFilter searchFilter;
@@ -147,13 +146,15 @@ namespace NuGetGallery.OData
             {
                 searchFilter.SearchTerm = searchTerm;
                 searchFilter.IncludePrerelease = includePrerelease;
-                searchFilter.CuratedFeed = curatedFeed;
                 searchFilter.SupportedFramework = targetFramework;
                 searchFilter.SemVerLevel = semVerLevel;
 
                 var results = await GetResultsFromSearchService(searchService, searchFilter);
 
-                return new SearchAdaptorResult(true, results);
+                if (SearchResults.IsSuccessful(results))
+                {
+                    return new SearchAdaptorResult(true, FormatResults(searchFilter, results));
+                }
             }
 
             if (!includePrerelease)

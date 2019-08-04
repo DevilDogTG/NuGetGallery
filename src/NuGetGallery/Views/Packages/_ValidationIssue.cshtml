@@ -63,9 +63,24 @@
             The checksum does not match for the dll(s) and corresponding pdb(s).
         </text>
         break;
-    case ValidationIssueCode.SymbolErrorCode_MatchingPortablePDBNotFound:
+    case ValidationIssueCode.SymbolErrorCode_MatchingAssemblyNotFound:
         <text>
             The uploaded symbols package contains pdb(s) for a corresponding dll(s) not found in the nuget package.
+        </text>
+        break;
+    case ValidationIssueCode.SymbolErrorCode_PdbIsNotPortable:
+        <text>
+            The uploaded symbols package contains one or more pdbs that are not portable.
+        </text>
+        break;
+    case ValidationIssueCode.SymbolErrorCode_SnupkgDoesNotContainSymbols:
+        <text>
+            The uploaded symbols package does not contain any symbol files.
+        </text>
+	break;
+    case ValidationIssueCode.SymbolErrorCode_SnupkgContainsEntriesNotSafeForExtraction:
+        <text>
+            The uploaded symbols package contains entries that are not safe for extraction.
         </text>
         break;
     default:

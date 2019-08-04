@@ -12,10 +12,11 @@ using System.Threading.Tasks;
 using System.Web;
 using System.Web.Mvc;
 using Moq;
+using NuGet.Services.Entities;
+using NuGet.Services.Messaging.Email;
 using NuGetGallery.Areas.Admin.ViewModels;
 using NuGetGallery.Authentication;
 using NuGetGallery.Framework;
-using NuGetGallery.Infrastructure.Mail;
 using NuGetGallery.Infrastructure.Mail.Messages;
 using NuGetGallery.Security;
 using Xunit;
@@ -271,6 +272,46 @@ namespace NuGetGallery
                 // Assert
                 Assert.NotNull(result);
                 Assert.Equal((int)HttpStatusCode.Forbidden, result.StatusCode);
+            }
+
+            [Fact]
+            public async Task SendsProperNewAccountMessage()
+            {
+                // Arrange
+                var controller = GetController();
+                var account = GetAccount(controller);
+
+                account.EmailAddress = null;
+                account.UnconfirmedEmailAddress = "baz@bar.test";
+
+                // Act
+                var result = await InvokeConfirmationRequiredPostAsync(controller, account, _getFakesOrganizationAdmin) as HttpStatusCodeResult;
+
+                // Assert
+                GetMock<IMessageService>()
+                    .Verify(ms => ms.SendMessageAsync(It.IsAny<EmailChangeConfirmationMessage>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Never);
+                GetMock<IMessageService>()
+                    .Verify(ms => ms.SendMessageAsync(It.IsAny<NewAccountMessage>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Once);
+            }
+
+            [Fact]
+            public async Task ResendsProperConfirmationEmail()
+            {
+                // Arrange
+                var controller = GetController();
+                var account = GetAccount(controller);
+
+                account.EmailAddress = "foo@bar.test";
+                account.UnconfirmedEmailAddress = "baz@bar.test";
+
+                // Act
+                var result = await InvokeConfirmationRequiredPostAsync(controller, account, _getFakesOrganizationAdmin) as HttpStatusCodeResult;
+
+                // Assert
+                GetMock<IMessageService>()
+                    .Verify(ms => ms.SendMessageAsync(It.IsAny<EmailChangeConfirmationMessage>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Once);
+                GetMock<IMessageService>()
+                    .Verify(ms => ms.SendMessageAsync(It.IsAny<NewAccountMessage>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Never);
             }
         }
 
@@ -1325,9 +1366,11 @@ namespace NuGetGallery
         public class TheDeleteAccountRequestAction : TheDeleteOrganizationBaseAction
         {
             [Theory]
-            [InlineData(false)]
-            [InlineData(true)]
-            public async Task IfAdministrator_ShowsViewWithCorrectData(bool withAdditionalMembers)
+            [InlineData(false, false)]
+            [InlineData(false, true)]
+            [InlineData(true, false)]
+            [InlineData(true, true)]
+            public async Task IfAdministrator_ShowsViewWithCorrectData(bool isPackageOrphaned, bool withAdditionalMembers)
             {
                 // Arrange
                 var controller = GetController<OrganizationsController>();
@@ -1360,6 +1403,9 @@ namespace NuGetGallery
                 GetMock<IPackageService>()
                     .Setup(stub => stub.FindPackagesByAnyMatchingOwner(testOrganization, It.IsAny<bool>(), false))
                     .Returns(userPackages);
+                GetMock<IPackageService>()
+                    .Setup(stub => stub.WillPackageBeOrphanedIfOwnerRemoved(packageRegistration, testOrganization))
+                    .Returns(isPackageOrphaned);
 
                 // act
                 var result = await Invoke(controller, testOrganization.Username);
@@ -1368,7 +1414,7 @@ namespace NuGetGallery
                 var model = ResultAssert.IsView<DeleteOrganizationViewModel>(result, "DeleteAccount");
                 Assert.Equal(testOrganization.Username, model.AccountName);
                 Assert.Single(model.Packages);
-                Assert.True(model.HasOrphanPackages);
+                Assert.Equal(isPackageOrphaned, model.HasPackagesThatWillBeOrphaned);
                 Assert.Equal(withAdditionalMembers, model.HasAdditionalMembers);
             }
 
@@ -1392,6 +1438,9 @@ namespace NuGetGallery
                 GetMock<IPackageService>()
                     .Setup(x => x.FindPackagesByAnyMatchingOwner(testOrganization, true, false))
                     .Returns(new[] { new Package { Version = "1.0.0", PackageRegistration = new PackageRegistration { Owners = new[] { testOrganization } } } });
+                GetMock<IPackageService>()
+                    .Setup(x => x.WillPackageBeOrphanedIfOwnerRemoved(It.IsAny<PackageRegistration>(), testOrganization))
+                    .Returns(true);
 
                 // Act & Assert
                 await RedirectsToDeleteRequest(
@@ -1429,8 +1478,8 @@ namespace NuGetGallery
                 testOrganization.Members.Remove(fakes.OrganizationCollaborator.Organizations.Single());
 
                 GetMock<IDeleteAccountService>()
-                    .Setup(x => x.DeleteAccountAsync(testOrganization, currentUser, true, AccountDeletionOrphanPackagePolicy.DoNotAllowOrphans))
-                    .Returns(Task.FromResult(new DeleteUserAccountStatus { Success = false }));
+                    .Setup(x => x.DeleteAccountAsync(testOrganization, currentUser, AccountDeletionOrphanPackagePolicy.DoNotAllowOrphans))
+                    .Returns(Task.FromResult(new DeleteAccountStatus { Success = false }));
 
                 // Act & Assert
                 await RedirectsToDeleteRequest(
@@ -1452,8 +1501,8 @@ namespace NuGetGallery
                 testOrganization.Members.Remove(fakes.OrganizationCollaborator.Organizations.Single());
 
                 GetMock<IDeleteAccountService>()
-                    .Setup(x => x.DeleteAccountAsync(testOrganization, currentUser, true, AccountDeletionOrphanPackagePolicy.DoNotAllowOrphans))
-                    .Returns(Task.FromResult(new DeleteUserAccountStatus { Success = true }));
+                    .Setup(x => x.DeleteAccountAsync(testOrganization, currentUser, AccountDeletionOrphanPackagePolicy.DoNotAllowOrphans))
+                    .Returns(Task.FromResult(new DeleteAccountStatus { Success = true }));
 
                 // Act
                 var result = await Invoke(controller, testOrganization.Username);
@@ -2140,6 +2189,52 @@ namespace NuGetGallery
 
                 Assert.NotNull(response);
                 Assert.Equal((int)HttpStatusCode.OK, _controller.Response.StatusCode);
+            }
+        }
+
+        public class TheDeleteOrganizationAccountAction : TestContainer
+        {
+            [Theory]
+            [InlineData(false)]
+            [InlineData(true)]
+            public void DeleteHappyAccount(bool withPendingIssues)
+            {
+                // Arrange
+                var controller = GetController<OrganizationsController>();
+                var fakes = Get<Fakes>();
+                var testUser = fakes.Organization;
+                var username = testUser.Username;
+                controller.SetCurrentUser(fakes.OrganizationAdmin);
+
+                PackageRegistration packageRegistration = new PackageRegistration();
+                packageRegistration.Owners.Add(testUser);
+
+                Package userPackage = new Package()
+                {
+                    Description = "TestPackage",
+                    Key = 1,
+                    Version = "1.0.0",
+                    PackageRegistration = packageRegistration
+                };
+                packageRegistration.Packages.Add(userPackage);
+
+                List<Package> userPackages = new List<Package>() { userPackage };
+
+                GetMock<IUserService>()
+                    .Setup(stub => stub.FindByUsername(username, false))
+                    .Returns(testUser);
+                GetMock<IPackageService>()
+                    .Setup(stub => stub.FindPackagesByAnyMatchingOwner(testUser, It.IsAny<bool>(), false))
+                    .Returns(userPackages);
+
+                // act
+                var model = ResultAssert.IsView<DeleteOrganizationViewModel>(controller.Delete(accountName: username), viewName: "DeleteOrganizationAccount");
+
+                // Assert
+                Assert.Equal(username, model.AccountName);
+                Assert.Single(model.Packages);
+                Assert.Single(model.AdditionalMembers);
+                Assert.True(model.HasAdditionalMembers);
             }
         }
     }

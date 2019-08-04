@@ -7,6 +7,7 @@ using System.Data.Entity;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Web;
+using NuGet.Services.Entities;
 using NuGetGallery.Auditing;
 
 namespace NuGetGallery
@@ -171,7 +172,7 @@ namespace NuGetGallery
             try
             {
                 await _fileStorageService.SaveFileAsync(
-                    CoreConstants.UserCertificatesFolderName,
+                    CoreConstants.Folders.UserCertificatesFolderName,
                     filePath,
                     certificateFile.Stream,
                     overwrite: false);

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web.Mvc;
+using NuGet.Services.Entities;
 
 namespace NuGetGallery
 {
@@ -19,7 +20,8 @@ namespace NuGetGallery
             int pageIndex,
             int pageSize,
             UrlHelper url,
-            bool includePrerelease)
+            bool includePrerelease,
+            bool isPreviewSearch)
         {
             // TODO: Implement actual sorting
             IEnumerable<ListPackageItemViewModel> items = packages.ToList().Select(pv => new ListPackageItemViewModel(pv, currentUser));
@@ -40,6 +42,7 @@ namespace NuGetGallery
             LastResultIndex = FirstResultIndex + Items.Count() - 1;
             Pager = pager;
             IncludePrerelease = includePrerelease;
+            IsPreviewSearch = isPreviewSearch;
         }
 
         public int FirstResultIndex { get; }
@@ -61,5 +64,7 @@ namespace NuGetGallery
         public DateTime? IndexTimestampUtc { get; }
 
         public bool IncludePrerelease { get; }
+
+        public bool IsPreviewSearch { get; }
     }
 }

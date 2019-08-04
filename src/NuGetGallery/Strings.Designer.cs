@@ -19,7 +19,7 @@ namespace NuGetGallery {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "16.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Strings {
@@ -61,7 +61,7 @@ namespace NuGetGallery {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The account:{0} was already deleted. No action was performed..
+        ///   Looks up a localized string similar to The account &apos;{0}&apos; was already deleted. No action was performed..
         /// </summary>
         public static string AccountDelete_AccountAlreadyDeleted {
             get {
@@ -79,7 +79,7 @@ namespace NuGetGallery {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to An exception was encoutered while trying to delete the account:{0}. {1}.
+        ///   Looks up a localized string similar to An exception was encountered while trying to delete the account &apos;{0}&apos;: {1}.
         /// </summary>
         public static string AccountDelete_Fail {
             get {
@@ -97,7 +97,7 @@ namespace NuGetGallery {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The account:{0} was deleted succesfully..
+        ///   Looks up a localized string similar to The account &apos;{0}&apos; was deleted succesfully..
         /// </summary>
         public static string AccountDelete_Success {
             get {
@@ -487,6 +487,15 @@ namespace NuGetGallery {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Unknown error!.
+        /// </summary>
+        public static string AuthenticationFailure_UnkownError {
+            get {
+                return ResourceManager.GetString("AuthenticationFailure_UnkownError", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The &apos;{0}&apos; authentication provider is disabled and cannot be used to authenticate
         ///.
         /// </summary>
@@ -587,7 +596,7 @@ namespace NuGetGallery {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Failed to update the Microsoft account with &apos;{0}&apos;. This could happen if it is already linked to another NuGet account. Contact support for more information..
+        ///   Looks up a localized string similar to Failed to update the Microsoft account with &apos;{0}&apos;. This could happen if it is already linked to another NuGet account. See {1} for more details..
         /// </summary>
         public static string ChangeCredential_Failed {
             get {
@@ -758,6 +767,96 @@ namespace NuGetGallery {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to A package cannot be the alternate package of itself..
+        /// </summary>
+        public static string DeprecatePackage_AlternateOfSelf {
+            get {
+                return ResourceManager.GetString("DeprecatePackage_AlternateOfSelf", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to You must add a custom message if you are deprecating a package due to another reason!.
+        /// </summary>
+        public static string DeprecatePackage_CustomMessageRequired {
+            get {
+                return ResourceManager.GetString("DeprecatePackage_CustomMessageRequired", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Your custom message is too long. It must be under {0} characters..
+        /// </summary>
+        public static string DeprecatePackage_CustomMessageTooLong {
+            get {
+                return ResourceManager.GetString("DeprecatePackage_CustomMessageTooLong", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to You do not have permission to deprecate this package..
+        /// </summary>
+        public static string DeprecatePackage_Forbidden {
+            get {
+                return ResourceManager.GetString("DeprecatePackage_Forbidden", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package &apos;{0}&apos; is locked and cannot have its deprecation changed..
+        /// </summary>
+        public static string DeprecatePackage_Locked {
+            get {
+                return ResourceManager.GetString("DeprecatePackage_Locked", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package &apos;{0}&apos; could not be found..
+        /// </summary>
+        public static string DeprecatePackage_MissingRegistration {
+            get {
+                return ResourceManager.GetString("DeprecatePackage_MissingRegistration", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to At least one version of package &apos;{0}&apos; specified could not be found..
+        /// </summary>
+        public static string DeprecatePackage_MissingVersion {
+            get {
+                return ResourceManager.GetString("DeprecatePackage_MissingVersion", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Alternate package &apos;{0} {1}&apos; does not exist..
+        /// </summary>
+        public static string DeprecatePackage_NoAlternatePackage {
+            get {
+                return ResourceManager.GetString("DeprecatePackage_NoAlternatePackage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Alternate package &apos;{0}&apos; does not exist..
+        /// </summary>
+        public static string DeprecatePackage_NoAlternatePackageRegistration {
+            get {
+                return ResourceManager.GetString("DeprecatePackage_NoAlternatePackageRegistration", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to You must select at least one version to deprecate!.
+        /// </summary>
+        public static string DeprecatePackage_NoVersions {
+            get {
+                return ResourceManager.GetString("DeprecatePackage_NoVersions", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The password login is discontinued and has been removed for your account. Please use your Microsoft account to log into {0} going forward..
         /// </summary>
         public static string DiscontinuedLogin_PasswordRemoved {
@@ -847,7 +946,7 @@ namespace NuGetGallery {
         ///
         ///[{0}]({0})
         ///
-        ///Note that NuGet.org password login is deprecated. Please use Microsoft account to sign into {1}.
+        ///Note that NuGet.org password login is no longer supported. Please use Microsoft account to sign into {1}.
         ///
         ///Thanks,
         ///The {1} Team.
@@ -875,7 +974,7 @@ namespace NuGetGallery {
         ///
         ///[{0}]({0})
         ///
-        ///Note that NuGet.org password login is deprecated. Please use Microsoft account to sign into {1}.
+        ///Note that NuGet.org password login is no longer supported. Please use Microsoft account to sign into {1}.
         ///
         ///Thanks,
         ///The {1} Team.
@@ -1526,7 +1625,7 @@ namespace NuGetGallery {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The namespace &apos;{0}&apos; contains invalid characters. Examples of valid namespaces include &apos;MyNamespace&apos; and &apos;MyNamespace.&apos;..
+        ///   Looks up a localized string similar to The namespace &apos;{0}&apos; contains invalid characters. Examples of valid namespaces include &apos;MyNamespace&apos;, &apos;MyNamespace.&apos; or &apos;MyNamespace-&apos; etc..
         /// </summary>
         public static string ReservedNamespace_InvalidCharactersInNamespace {
             get {
@@ -1715,11 +1814,38 @@ namespace NuGetGallery {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Search Service is not available. Please try again later..
+        /// </summary>
+        public static string SearchServiceIsNotAvailable {
+            get {
+                return ResourceManager.GetString("SearchServiceIsNotAvailable", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The package metadata contains a non-compliant copyright element..
         /// </summary>
         public static string SecurityPolicy_CopyrightNotCompliant {
             get {
                 return ResourceManager.GetString("SecurityPolicy_CopyrightNotCompliant", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The package metadata defines &apos;{0}&apos; as author more than once, which is not allowed by policy..
+        /// </summary>
+        public static string SecurityPolicy_PackageAuthorDuplicatesNotAllowed {
+            get {
+                return ResourceManager.GetString("SecurityPolicy_PackageAuthorDuplicatesNotAllowed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The package metadata defines &apos;{0}&apos; as one of the authors which is not allowed by policy..
+        /// </summary>
+        public static string SecurityPolicy_PackageAuthorNotAllowed {
+            get {
+                return ResourceManager.GetString("SecurityPolicy_PackageAuthorNotAllowed", resourceCulture);
             }
         }
         
@@ -1883,6 +2009,15 @@ namespace NuGetGallery {
         public static string SymbolsPackage_InvalidFiles {
             get {
                 return ResourceManager.GetString("SymbolsPackage_InvalidFiles", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The package does not contain any symbol (.pdb) files..
+        /// </summary>
+        public static string SymbolsPackage_NoSymbols {
+            get {
+                return ResourceManager.GetString("SymbolsPackage_NoSymbols", resourceCulture);
             }
         }
         
@@ -2175,6 +2310,60 @@ namespace NuGetGallery {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The package file is corrupt..
+        /// </summary>
+        public static string UploadPackage_CorruptNupkg {
+            get {
+                return ResourceManager.GetString("UploadPackage_CorruptNupkg", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to &lt;licenseUrl&gt; element will be deprecated, please consider switching to specifying the license in the package..
+        /// </summary>
+        public static string UploadPackage_DeprecatingLicenseUrl {
+            get {
+                return ResourceManager.GetString("UploadPackage_DeprecatingLicenseUrl", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to To provide a better experience for older clients when a license expression is specified, &lt;licenseUrl&gt; must be set to &apos;{0}&apos;..
+        /// </summary>
+        public static string UploadPackage_DeprecationUrlRequiredForLicenseExpressions {
+            get {
+                return ResourceManager.GetString("UploadPackage_DeprecationUrlRequiredForLicenseExpressions", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to To provide a better experience for older clients when a license file is packaged, &lt;licenseUrl&gt; must be set to &apos;{0}&apos;..
+        /// </summary>
+        public static string UploadPackage_DeprecationUrlRequiredForLicenseFiles {
+            get {
+                return ResourceManager.GetString("UploadPackage_DeprecationUrlRequiredForLicenseFiles", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The license deprecation URL must be used in conjunction with specifying the license in the package..
+        /// </summary>
+        public static string UploadPackage_DeprecationUrlUsage {
+            get {
+                return ResourceManager.GetString("UploadPackage_DeprecationUrlUsage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The &lt;icon&gt; element is not currently supported..
+        /// </summary>
+        public static string UploadPackage_EmbeddedIconNotAccepted {
+            get {
+                return ResourceManager.GetString("UploadPackage_EmbeddedIconNotAccepted", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to This package ID has been reserved. Please request access to upload to this reserved namespace from the owner of the reserved prefix, or re-upload the package with a different ID..
         /// </summary>
         public static string UploadPackage_IdNamespaceConflict {
@@ -2189,6 +2378,24 @@ namespace NuGetGallery {
         public static string UploadPackage_IdVersionConflict {
             get {
                 return ResourceManager.GetString("UploadPackage_IdVersionConflict", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The license file has invalid extension &apos;{0}&apos;. Extension must be either empty or one of the following: {1}..
+        /// </summary>
+        public static string UploadPackage_InvalidLicenseFileExtension {
+            get {
+                return ResourceManager.GetString("UploadPackage_InvalidLicenseFileExtension", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Invalid license metadata: {0}.
+        /// </summary>
+        public static string UploadPackage_InvalidLicenseMetadata {
+            get {
+                return ResourceManager.GetString("UploadPackage_InvalidLicenseMetadata", resourceCulture);
             }
         }
         
@@ -2220,11 +2427,101 @@ namespace NuGetGallery {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Learn more.
+        /// </summary>
+        public static string UploadPackage_LearnMore {
+            get {
+                return ResourceManager.GetString("UploadPackage_LearnMore", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Specifying &lt;licenseUrl&gt; in the package metadata is no longer allowed, please specify the license in the package..
+        /// </summary>
+        public static string UploadPackage_LegacyLicenseUrlNotAllowed {
+            get {
+                return ResourceManager.GetString("UploadPackage_LegacyLicenseUrlNotAllowed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The license file &apos;{0}&apos; does not exist in the package..
+        /// </summary>
+        public static string UploadPackage_LicenseFileDoesNotExist {
+            get {
+                return ResourceManager.GetString("UploadPackage_LicenseFileDoesNotExist", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The license file cannot be longer than {0}..
+        /// </summary>
+        public static string UploadPackage_LicenseFileTooLong {
+            get {
+                return ResourceManager.GetString("UploadPackage_LicenseFileTooLong", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The license file must be plain text using UTF-8 encoding..
+        /// </summary>
+        public static string UploadPackage_LicenseMustBePlainText {
+            get {
+                return ResourceManager.GetString("UploadPackage_LicenseMustBePlainText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The license node cannot contain child nodes..
+        /// </summary>
+        public static string UploadPackage_LicenseNodeContainsChildren {
+            get {
+                return ResourceManager.GetString("UploadPackage_LicenseNodeContainsChildren", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The license node value must be shorter than 500 characters..
+        /// </summary>
+        public static string UploadPackage_LicenseNodeValueTooLong {
+            get {
+                return ResourceManager.GetString("UploadPackage_LicenseNodeValueTooLong", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to All published packages should have license information specified..
+        /// </summary>
+        public static string UploadPackage_LicenseShouldBeSpecified {
+            get {
+                return ResourceManager.GetString("UploadPackage_LicenseShouldBeSpecified", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The package contains a malformed license URL..
+        /// </summary>
+        public static string UploadPackage_MalformedLicenseUrl {
+            get {
+                return ResourceManager.GetString("UploadPackage_MalformedLicenseUrl", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to This package requires version &apos;{0}&apos; of NuGet, which this gallery does not currently support. Please contact us if you have questions..
         /// </summary>
         public static string UploadPackage_MinClientVersionOutOfRange {
             get {
                 return ResourceManager.GetString("UploadPackage_MinClientVersionOutOfRange", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The package has no license information specified..
+        /// </summary>
+        public static string UploadPackage_MissingLicenseInformation {
+            get {
+                return ResourceManager.GetString("UploadPackage_MissingLicenseInformation", resourceCulture);
             }
         }
         
@@ -2243,6 +2540,15 @@ namespace NuGetGallery {
         public static string UploadPackage_NewVersionOnBehalfOfUserNotAllowed {
             get {
                 return ResourceManager.GetString("UploadPackage_NewVersionOnBehalfOfUserNotAllowed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to License expression must only contain licenses that are approved by Open Source Initiative or Free Software Foundation. Unsupported licenses: {0}..
+        /// </summary>
+        public static string UploadPackage_NonFsfOrOsiLicense {
+            get {
+                return ResourceManager.GetString("UploadPackage_NonFsfOrOsiLicense", resourceCulture);
             }
         }
         
@@ -2307,6 +2613,33 @@ namespace NuGetGallery {
         public static string UploadPackage_SignedToUnsignedTransition {
             get {
                 return ResourceManager.GetString("UploadPackage_SignedToUnsignedTransition", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Snupkg upload failed. Please use latest NuGet clients (v 4.9.0 or above) and a V3 endpoint to push Symbol packages. For details, refer https://docs.microsoft.com/nuget/create-packages/symbol-packages-snupkg.
+        /// </summary>
+        public static string UploadPackage_SymbolsPackageNotAllowed {
+            get {
+                return ResourceManager.GetString("UploadPackage_SymbolsPackageNotAllowed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unsupported license type &apos;{0}&apos;..
+        /// </summary>
+        public static string UploadPackage_UnsupportedLicenseType {
+            get {
+                return ResourceManager.GetString("UploadPackage_UnsupportedLicenseType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unsupported license version &apos;{0}&apos;. The only supported license version is 1.0.0..
+        /// </summary>
+        public static string UploadPackage_UnsupportedLicenseVersion {
+            get {
+                return ResourceManager.GetString("UploadPackage_UnsupportedLicenseVersion", resourceCulture);
             }
         }
         

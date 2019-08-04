@@ -4,7 +4,7 @@
 using Newtonsoft.Json.Linq;
 using Xunit;
 
-namespace NuGetGallery.Infrastructure.Lucene
+namespace NuGetGallery.Infrastructure.Search
 {
     public class ExternalSearchServiceFacts
     {

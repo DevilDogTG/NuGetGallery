@@ -4,6 +4,8 @@
 using System;
 using System.Globalization;
 using System.Net.Mail;
+using NuGet.Services.Entities;
+using NuGet.Services.Messaging.Email;
 
 namespace NuGetGallery.Infrastructure.Mail.Messages
 {
@@ -33,13 +35,10 @@ namespace NuGetGallery.Infrastructure.Mail.Messages
 
         public override IEmailRecipients GetRecipients()
         {
-            if (!_accountToTransform.EmailAllowed)
-            {
-                return EmailRecipients.None;
-            }
-
             return new EmailRecipients(
-                to: new[] { _accountToTransform.ToMailAddress() },
+                to: _accountToTransform.EmailAllowed
+                    ? new[] { _accountToTransform.ToMailAddress() }
+                    : new MailAddress[0],
                 replyTo: new[] { _adminUser.ToMailAddress() });
         }
 

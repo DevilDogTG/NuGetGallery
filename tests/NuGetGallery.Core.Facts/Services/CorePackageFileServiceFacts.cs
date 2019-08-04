@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Web;
 using Moq;
+using NuGet.Services.Entities;
 using Xunit;
 
 namespace NuGetGallery
@@ -107,7 +108,7 @@ namespace NuGetGallery
             {
                 var fileStorageSvc = new Mock<ICoreFileStorageService>();
                 var service = CreateService(fileStorageService: fileStorageSvc);
-                fileStorageSvc.Setup(x => x.SaveFileAsync(CoreConstants.PackagesFolderName, It.IsAny<string>(), It.IsAny<Stream>(), It.Is<bool>(b => !b)))
+                fileStorageSvc.Setup(x => x.SaveFileAsync(CoreConstants.Folders.PackagesFolderName, It.IsAny<string>(), It.IsAny<Stream>(), It.Is<bool>(b => !b)))
                     .Completes()
                     .Verifiable();
 
@@ -632,7 +633,7 @@ namespace NuGetGallery
             {
                 var fileStorageSvc = new Mock<ICoreFileStorageService>();
                 var service = CreateService(fileStorageService: fileStorageSvc);
-                fileStorageSvc.Setup(x => x.SaveFileAsync(CoreConstants.PackageBackupsFolderName, It.IsAny<string>(), It.IsAny<Stream>(), It.Is<bool>(b => b)))
+                fileStorageSvc.Setup(x => x.SaveFileAsync(CoreConstants.Folders.PackageBackupsFolderName, It.IsAny<string>(), It.IsAny<Stream>(), It.Is<bool>(b => b)))
                     .Completes()
                     .Verifiable();
 

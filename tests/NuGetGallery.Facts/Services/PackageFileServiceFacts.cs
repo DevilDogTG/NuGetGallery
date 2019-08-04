@@ -6,9 +6,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using System.Web;
 using System.Web.Mvc;
 using Moq;
+using NuGet.Services.Entities;
 using Xunit;
 
 namespace NuGetGallery
@@ -46,7 +46,7 @@ namespace NuGetGallery
             {
                 var fileStorageSvc = new Mock<IFileStorageService>();
                 var service = CreateService(fileStorageSvc: fileStorageSvc);
-                fileStorageSvc.Setup(x => x.DeleteFileAsync(CoreConstants.PackagesFolderName, It.IsAny<string>()))
+                fileStorageSvc.Setup(x => x.DeleteFileAsync(CoreConstants.Folders.PackagesFolderName, It.IsAny<string>()))
                     .Completes()
                     .Verifiable();
 
@@ -125,7 +125,7 @@ namespace NuGetGallery
             {
                 var fileStorageSvc = new Mock<IFileStorageService>();
                 var service = CreateService(fileStorageSvc: fileStorageSvc);
-                fileStorageSvc.Setup(x => x.CreateDownloadFileActionResultAsync(new Uri("http://fake"), CoreConstants.PackagesFolderName, It.IsAny<string>()))
+                fileStorageSvc.Setup(x => x.CreateDownloadFileActionResultAsync(new Uri("http://fake"), CoreConstants.Folders.PackagesFolderName, It.IsAny<string>()))
                     .CompletesWithNull()
                     .Verifiable();
 
@@ -212,7 +212,7 @@ namespace NuGetGallery
                 await service.DeleteReadMeMdFileAsync(package);
 
                 // Assert.
-                fileServiceMock.Verify(fs => fs.DeleteFileAsync(CoreConstants.PackageReadMesFolderName, $"active/test/1.0.0.md"), Times.Once);
+                fileServiceMock.Verify(fs => fs.DeleteFileAsync(CoreConstants.Folders.PackageReadMesFolderName, $"active/test/1.0.0.md"), Times.Once);
             }
         }
 
@@ -257,7 +257,7 @@ namespace NuGetGallery
                 await service.SaveReadMeMdFileAsync(package, "<p>Hello World!</p>");
 
                 // Assert.
-                fileServiceMock.Verify(f => f.SaveFileAsync(CoreConstants.PackageReadMesFolderName, "active/foo/1.0.0.md", It.IsAny<Stream>(), true),
+                fileServiceMock.Verify(f => f.SaveFileAsync(CoreConstants.Folders.PackageReadMesFolderName, "active/foo/1.0.0.md", It.IsAny<Stream>(), true),
                     Times.Once);
             }
         }
@@ -301,7 +301,7 @@ namespace NuGetGallery
                     // Assert.
                     Assert.Equal(expectedMd, actualMd);
 
-                    fileServiceMock.Verify(f => f.GetFileAsync(CoreConstants.PackageReadMesFolderName, $"active/foo/1.1.1.md"), Times.Once);
+                    fileServiceMock.Verify(f => f.GetFileAsync(CoreConstants.Folders.PackageReadMesFolderName, $"active/foo/1.1.1.md"), Times.Once);
                 }
             }
 
@@ -330,7 +330,7 @@ namespace NuGetGallery
                 // Assert
                 Assert.Null(result);
 
-                fileServiceMock.Verify(f => f.GetFileAsync(CoreConstants.PackageReadMesFolderName, $"active/foo/1.1.1.md"), Times.Once);
+                fileServiceMock.Verify(f => f.GetFileAsync(CoreConstants.Folders.PackageReadMesFolderName, $"active/foo/1.1.1.md"), Times.Once);
             }
         }
 

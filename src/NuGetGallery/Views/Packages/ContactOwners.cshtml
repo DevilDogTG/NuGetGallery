@@ -2,7 +2,7 @@
 @{
     ViewBag.Title = "Contact the Owners of " + Model.PackageId + " " + Model.PackageVersion;
     ViewBag.Tab = "Packages";
-    ViewBag.MdPageColumns = Constants.ColumnsFormMd;
+    ViewBag.MdPageColumns = GalleryConstants.ColumnsFormMd;
 }
 
 <section role="main" class="container main-container page-contact-owners">
@@ -32,7 +32,7 @@
                         <p>
                             @foreach (var owner in Model.Owners)
                             {
-                                <a href="@Url.User(owner)" title="View @owner.Username's profile" class="ms-font-xl">@owner.Username</a>
+                                <a href="@Url.User(owner)" title="View @owner's profile" class="ms-font-xl">@owner</a>
                             }
                         </p>
                     </div>

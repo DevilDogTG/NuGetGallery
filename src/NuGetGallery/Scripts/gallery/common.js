@@ -208,72 +208,46 @@
     nuget.configureFileInputButton = function (id) {
         // File input buttons should respond to keyboard events.
         $("#" + id).on("keypress", function (e) {
-            var code = (e.keyCode || e.which);
-            var isInteract = (code == 13 /*enter*/ || code == 32 /*space*/) && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+            var code = e.keyCode || e.which;
+            var isInteract = (code === 13 /*enter*/ || code === 32 /*space*/) && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
             if (isInteract) {
                 $(this).click();
             }
         });
-    }
+    };
 
-    nuget.canElementBeTabbedTo = function (element) {
-        var isElement = function (type) {
-            return element.is(type);
+    nuget.canElementBeFocused = function (element) {
+        element = $(element);
+        if (!element.is(':visible')) {
+            return false;
         }
 
-        var hasAttribute = function (attributeName) {
-            var attribute = element.attr(attributeName);
-            return typeof attribute !== typeof undefined && attribute !== false;
-        }
-
-        if (hasAttribute("tabindex")) {
-            // Elements that have had their tabindex set to -1 cannot be tabbed to.
-            return element.attr("tabindex") !== "-1";
+        // Elements with tabindex set to a value besides -1 are focusable.
+        var tabIndex = element.attr('tabindex');
+        if (!!tabIndex && tabIndex >= 0) {
+            return true;
         }
 
         // See https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/Content_categories#Interactive_content
         var alwaysInteractiveElements = ['a', 'button', 'details', 'embed', 'iframe', 'keygen', 'label', 'select', 'textarea'];
         var i;
         for (i = 0; i < alwaysInteractiveElements.length; i++) {
-            if (isElement(alwaysInteractiveElements[i])) {
+            if (element.is(alwaysInteractiveElements[i])) {
                 return true;
             }
         }
 
-        return ((isElement("audio") && hasAttribute("controls")) ||
-            (isElement("img") && hasAttribute("usemap")) ||
-            (isElement("input") && element.attr("type") !== "hidden") ||
-            (isElement("menu") && element.attr("type") !== "toolbar") ||
-            (isElement("object") && hasAttribute("usemap")) ||
-            (isElement("video") && hasAttribute("controls")));
-    }
+        return element.is("audio") && !!element.attr("controls") ||
+            element.is("img") && !!element.attr("usemap") ||
+            element.is("input") && element.attr("type") !== "hidden" ||
+            element.is("menu") && element.attr("type") !== "toolbar" ||
+            element.is("object") && !!element.attr("usemap") ||
+            element.is("video") && !!element.attr("controls");
+    };
 
-    nuget.getFirstChildThatCanBeTabbedTo = function (element) {
-        if (window.nuget.canElementBeTabbedTo(element)) {
-            return element;
-        }
-
-        // If an element has its tabindex set to -1, none of its children can be tabbed to.
-        if (element.attr("tabindex") === "-1") {
-            return null;
-        }
-
-        var i;
-        var children = element.children();
-        for (i = 0; i < children.length; i++) {
-            var child = children.eq(i);
-            if (window.nuget.canElementBeTabbedTo(child)) {
-                return child;
-            }
-
-            var childChild = window.nuget.getFirstChildThatCanBeTabbedTo(child);
-            if (childChild !== null) {
-                return childChild;
-            }
-        }
-
-        return null;
-    }
+    nuget.canElementBeTabbedTo = function (element) {
+        return window.nuget.canElementBeFocused(element) && $(element).attr('tabindex') !== "-1";
+    };
 
     // Source: https://stackoverflow.com/a/27568129/52749
     // Detects whether SVG is supported in the browser.
@@ -330,6 +304,10 @@
         return typeof ga === 'function';
     };
 
+    nuget.isAiAvailable = function () {
+        return typeof window.appInsights === 'object';
+    };
+
     nuget.getDateFormats = function (input) {
         var datetime = moment.utc(input);
 
@@ -365,7 +343,7 @@
         var $field = $("#AntiForgeryForm input[name=__RequestVerificationToken]");
         if (data instanceof FormData)
         {
-            data.append($tokenKey, $field.val())
+            data.append($tokenKey, $field.val());
         }
         else
         {
@@ -383,9 +361,69 @@
         }
 
         return stringToFormat;
-    }
+    };
+
+    nuget.isAncestor = function (element, ancestorSelector) {
+        var $target = $(element);
+        // '.closest' returns the list of ancestors between this element and the selector.
+        // If the selector is not an ancestor of the element, it returns an empty list.
+        return !!$target.closest(ancestorSelector).length;
+    };
+
+    nuget.configureDropdown = function (dropdownSelector, dropdownHeaderSelector, setDropdownOpen, openWhenFocused) {
+        var isElementInsideDropdown = function (element) {
+            return window.nuget.isAncestor(element, dropdownSelector);
+        };
+
+        // If the user clicks outside the dropdown, close it
+        $(document).click(function (event) {
+            if (!isElementInsideDropdown(event.target)) {
+                setDropdownOpen(false);
+            }
+        });
+
+        $(document).focusin(function (event) {
+            var isInsideDropdown = isElementInsideDropdown(event.target);
+            if (isInsideDropdown && openWhenFocused) {
+                // If an element inside the dropdown gains focus, open the dropdown if configured to
+                setDropdownOpen(true);
+            } else if (!isInsideDropdown) {
+                // If an element outside of the dropdown gains focus, close it
+                setDropdownOpen(false);
+            }
+        });
+
+        $(document).keydown(function (event) {
+            var target = event.target;
+            if (isElementInsideDropdown(target)) {
+                // If we press escape while focus is inside the dropdown, close it
+                if (event.which === 27) { // Escape key
+                    setDropdownOpen(false);
+                    event.preventDefault();
+                    $(dropdownHeaderSelector).focus();
+                }
+            }
+        });
+    };
+
+    nuget.sendAnalyticsEvent = function (category, action, label, eventValue, options) {
+        if (window.nuget.isGaAvailable()) {
+            ga('send', 'event', category, action, label, eventValue, options);
+        }
+    };
+
+    nuget.sendAiMetric = function (name, value, properties) {
+        if (window.nuget.isAiAvailable()) {
+            window.appInsights.trackMetric(name, value, 1, value, value, properties);
+        }
+    };
 
     window.nuget = nuget;
+
+    jQuery.extend(jQuery.expr.pseudos, {
+        focusable: window.nuget.canElementBeFocused,
+        tabbable: window.nuget.canElementBeTabbedTo
+    });
 
     initializeJQueryValidator();
 
@@ -408,7 +446,7 @@
         });
 
         // Handle confirm pop-ups.
-        $('*[data-confirm]').delegate('', 'click', function (e) {
+        $('*[data-confirm]').on('click', '', function (e) {
             window.nuget.confirmEvent($(this).data().confirm, e);
         });
 
@@ -416,26 +454,41 @@
         $('.has-error')
             .find('input,textarea,select')
             .filter(':visible:first')
-            .focus();
+            .trigger('focus');
 
         // Handle Google analytics tracking event on specific links.
-        $.each($('a[data-track]'), function () {
-            $(this).click(function (e) {
-                var href = $(this).attr('href');
-                var category = $(this).data().track;
-                if (window.nuget.isGaAvailable() && href && category) {
-                    if (e.altKey || e.ctrlKey || e.metaKey) {
-                        ga('send', 'event', category, 'click', href);
-                    } else {
-                        e.preventDefault();
-                        ga('send', 'event', category, 'click', href, {
-                            'transport': 'beacon',
-                            'hitCallback': window.nuget.createFunctionWithTimeout(function () {
-                                document.location = href;
-                            })
-                        });
-                    }
+        var emitClickEvent = function (e, emitDirectly) {
+            if (!window.nuget.isGaAvailable()) {
+                return;
+            }
+
+            var href = $(this).attr('href');
+            var category = $(this).data().track;
+            var trackValue = $(this).data().trackValue;
+            if (href && category) {
+                if (emitDirectly) {
+                    window.nuget.sendAnalyticsEvent(category, 'click', href, trackValue);
+                } else {
+                    // This path is used when the click will result in a page transition. Because of this we need to
+                    // emit telemetry in a special way so that the event gets out before the page transition occurs.
+                    e.preventDefault();
+                    window.nuget.sendAnalyticsEvent(category, 'click', href, trackValue, {
+                        'transport': 'beacon',
+                        'hitCallback': window.nuget.createFunctionWithTimeout(function () {
+                            document.location = href;
+                        })
+                    });
                 }
+            }
+        };
+        $.each($('a[data-track]'), function () {
+            $(this).on('mouseup', function (e) {
+                if (e.which === 2) { // Middle-mouse click
+                    emitClickEvent.call(this, e, true);
+                }
+            });
+            $(this).on('click', function (e) {
+                emitClickEvent.call(this, e, e.altKey || e.ctrlKey || e.metaKey);
             });
         });
 
@@ -454,16 +507,16 @@
         });
 
         $(document).on('keydown', function (e) {
-            var code = (e.keyCode || e.which);
+            var code = e.keyCode || e.which;
             var isValidInputCharacter =
-                ((code >= 48 && code <= 57)           // numbers 0-9
-                    || (code >= 64 && code <= 90)     // letters a-z
-                    || (code >= 96 && code <= 111)    // numpad
-                    || (code >= 186 && code <= 192)   // ; = , - . / `
-                    || (code >= 219 && code <= 222))  // [\ ] '
+                (code >= 48 && code <= 57           // numbers 0-9
+                    || code >= 64 && code <= 90     // letters a-z
+                    || code >= 96 && code <= 111    // numpad
+                    || code >= 186 && code <= 192   // ; = , - . / `
+                    || code >= 219 && code <= 222)  // [\ ] '
                 && !e.altKey && !e.ctrlKey && !e.metaKey;
 
-            if (isValidInputCharacter && document.activeElement == document.body) {
+            if (isValidInputCharacter && document.activeElement === document.body) {
                 var searchbox = $("#search");
                 searchbox.focus();
                 var currInput = searchbox.val();
@@ -475,7 +528,7 @@
         $("#skipToContent").on('click', function () {
             // Focus on the first element that can be tabbed to inside the "skippedToContent" element.
             var skippedToContent = $("#skippedToContent");
-            var firstChildThatCanBeTabbedTo = window.nuget.getFirstChildThatCanBeTabbedTo(skippedToContent.first());
+            var firstChildThatCanBeTabbedTo = skippedToContent.find(':tabbable').first();
             if (firstChildThatCanBeTabbedTo !== null) {
                 firstChildThatCanBeTabbedTo.focus();
             } else {
@@ -486,4 +539,3 @@
         });
     });
 }());
-

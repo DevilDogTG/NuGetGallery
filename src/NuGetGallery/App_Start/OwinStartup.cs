@@ -17,6 +17,7 @@ using Microsoft.Owin;
 using Microsoft.Owin.Logging;
 using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.Cookies;
+using NuGet.Services.FeatureFlags;
 using NuGet.Services.Logging;
 using NuGetGallery.Authentication;
 using NuGetGallery.Authentication.Providers;
@@ -73,7 +74,7 @@ namespace NuGetGallery
                     await Task.Delay(ContentObjectService.RefreshInterval, token);
                 }
             });
-            
+
             // Setup telemetry
             var instrumentationKey = config.Current.AppInsightsInstrumentationKey;
             if (!string.IsNullOrEmpty(instrumentationKey))
@@ -81,6 +82,7 @@ namespace NuGetGallery
                 TelemetryConfiguration.Active.InstrumentationKey = instrumentationKey;
 
                 // Add enrichers
+                TelemetryConfiguration.Active.TelemetryInitializers.Add(new DeploymentIdTelemetryEnricher());
                 TelemetryConfiguration.Active.TelemetryInitializers.Add(new ClientInformationTelemetryEnricher());
 
                 var telemetryProcessorChainBuilder = TelemetryConfiguration.Active.TelemetryProcessorChainBuilder;
@@ -92,6 +94,7 @@ namespace NuGetGallery
 
                     processor.SuccessfulResponseCodes.Add(400);
                     processor.SuccessfulResponseCodes.Add(404);
+                    processor.SuccessfulResponseCodes.Add(405);
 
                     return processor;
                 });
@@ -164,6 +167,12 @@ namespace NuGetGallery
                 auther.Startup(config, app).Wait();
             }
 
+            var featureFlags = DependencyResolver.Current.GetService<IFeatureFlagCacheService>();
+            if (featureFlags != null)
+            {
+                StartFeatureFlags(featureFlags);
+            }
+
             // Catch unobserved exceptions from threads before they cause IIS to crash:
             TaskScheduler.UnobservedTaskException += (sender, exArgs) =>
             {
@@ -203,6 +212,21 @@ namespace NuGetGallery
             };
 
             HasRun = true;
+        }
+
+        private static void StartFeatureFlags(IFeatureFlagCacheService featureFlags)
+        {
+            // Try to load the feature flags once at startup.
+            try
+            {
+                featureFlags.RefreshAsync().Wait();
+            }
+            catch (Exception)
+            {
+            }
+
+            // Continuously refresh the feature flags in the background.
+            HostingEnvironment.QueueBackgroundWorkItem(featureFlags.RunAsync);
         }
     }
 }

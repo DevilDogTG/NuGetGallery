@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using NuGet.Services.Entities;
 using NuGetGallery.Auditing.Obfuscation;
 
 namespace NuGetGallery.Auditing.AuditedEntities
@@ -29,6 +30,7 @@ namespace NuGetGallery.Auditing.AuditedEntities
         public long PackageFileSize { get; private set; }
         public string ProjectUrl { get; private set; }
         public bool RequiresLicenseAcceptance { get; private set; }
+        public bool DevelopmentDependency { get; private set; }
         public string Summary { get; private set; }
         public string Tags { get; private set; }
         public string Title { get; private set; }
@@ -73,6 +75,7 @@ namespace NuGetGallery.Auditing.AuditedEntities
                 PackageFileSize = package.PackageFileSize,
                 ProjectUrl = package.ProjectUrl,
                 RequiresLicenseAcceptance = package.RequiresLicenseAcceptance,
+                DevelopmentDependency = package.DevelopmentDependency,
                 Summary = package.Summary,
                 Tags = package.Tags,
                 Title = package.Title,

@@ -1,10 +1,12 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using NuGetGallery.Framework;
 using System;
 using System.Collections.Generic;
+using System.Web.Mvc;
 using System.Web.Routing;
+using NuGet.Services.Entities;
+using NuGetGallery.Framework;
 using Xunit;
 
 namespace NuGetGallery
@@ -71,6 +73,30 @@ namespace NuGetGallery
             }
         }
 
+        public class TheLicenseMethod
+            : TestContainer
+        {
+            [Theory]
+            [InlineData("https://nuget.org", "TestPackageId", "1.0.0", "/packages/TestPackageId/1.0.0/License", true)]
+            [InlineData("https://nuget.org", "TestPackageId", "1.0.0", "https://nuget.org/packages/TestPackageId/1.0.0/License", false)]
+            [InlineData("https://localhost:66", "AnotherTestPackageId", "3.0.0", "/packages/AnotherTestPackageId/3.0.0/License", true)]
+            [InlineData("https://localhost:66", "AnotherTestPackageId", "3.0.0", "https://localhost:66/packages/AnotherTestPackageId/3.0.0/License", false)]
+            public void ReturnsCorrectLicenseLink(string siteRoot, string packageId, string packageVersion, string expectedUrl, bool relativeUrl)
+            {
+                // Arrange
+                var configurationService = GetConfigurationService();
+                configurationService.Current.SiteRoot = siteRoot;
+
+                var urlHelper = TestUtility.MockUrlHelper(siteRoot);
+
+                // Act
+                var result = urlHelper.License(new TrivialPackageVersionModel(packageId, packageVersion), relativeUrl);
+
+                // Assert
+                Assert.Equal(expectedUrl, result);
+            }
+        }
+
         public class ThePackageRegistrationTemplateHelperMethod
             : TestContainer
         {
@@ -98,84 +124,106 @@ namespace NuGetGallery
             }
         }
 
-        public class TheEditPackageTemplateHelperMethod
+        public class ThePackageVersionActionTemplate
             : TestContainer
         {
-            [Fact]
-            public void ResolvePathIsCorrect()
+            public static IEnumerable<object[]> ResolvePathIsCorrect_Data
             {
-                // Arrange
-                var package = new Package
+                get
                 {
-                    PackageRegistration = new PackageRegistration
+                    yield return new object[]
                     {
-                        Id = "TestPackageId"
-                    },
-                    Version = "1.0.0"
-                };
+                        nameof(PackagesController.Manage),
+                        new Func<UrlHelper, IPackageVersionModel, string>(
+                            (url, package) => url.ManagePackage(package))
+                    };
 
-                var urlHelper = TestUtility.MockUrlHelper();
-                var packageVM = new ListPackageItemViewModel(package, currentUser: null);
+                    yield return new object[]
+                    {
+                        nameof(PackagesController.Reflow),
+                        new Func<UrlHelper, IPackageVersionModel, string>(
+                            (url, package) => url.ReflowPackage(package))
+                    };
 
-                // Act
-                var result = urlHelper.EditPackageTemplate().Resolve(packageVM);
+                    yield return new object[]
+                    {
+                        nameof(PackagesController.Revalidate),
+                        new Func<UrlHelper, IPackageVersionModel, string>(
+                            (url, package) => url.RevalidatePackage(package))
+                    };
 
-                // Assert
-                Assert.Equal(urlHelper.EditPackage(packageVM.Id, packageVM.Version), result);
+                    yield return new object[]
+                    {
+                        nameof(PackagesController.RevalidateSymbols),
+                        new Func<UrlHelper, IPackageVersionModel, string>(
+                            (url, package) => url.RevalidateSymbolsPackage(package))
+                    };
+
+                    yield return new object[]
+                    {
+                        nameof(PackagesController.DeleteSymbols),
+                        new Func<UrlHelper, IPackageVersionModel, string>(
+                            (url, package) => url.DeleteSymbolsPackage(package))
+                    };
+
+                    yield return new object[]
+                    {
+                        nameof(PackagesController.ReportMyPackage),
+                        new Func<UrlHelper, IPackageVersionModel, string>(
+                            (url, package) => url.ReportPackage(package))
+                    };
+
+                    yield return new object[]
+                    {
+                        nameof(PackagesController.ContactOwners),
+                        new Func<UrlHelper, IPackageVersionModel, string>(
+                            (url, package) => url.ContactOwners(package))
+                    };
+
+                    yield return new object[]
+                    {
+                        nameof(PackagesController.License),
+                        new Func<UrlHelper, IPackageVersionModel, string>(
+                            (url, package) => url.License(package))
+                    };
+                }
             }
-        }
 
-        public class TheDeletePackageTemplateHelperMethod
-            : TestContainer
-        {
-            [Fact]
-            public void ResolvePathIsCorrect()
+            [Theory]
+            [MemberData(nameof(ResolvePathIsCorrect_Data))]
+            public void ResolvePathIsCorrect(string action, Func<UrlHelper, IPackageVersionModel, string> caller)
             {
                 // Arrange
+                var packageId = "TestPackageId";
                 var package = new Package
                 {
                     PackageRegistration = new PackageRegistration
                     {
-                        Id = "TestPackageId"
+                        Id = packageId
                     },
                     Version = "1.0.0"
                 };
 
                 var urlHelper = TestUtility.MockUrlHelper();
-                var packageVM = new ListPackageItemViewModel(package, currentUser: null);
+                
+                var idModel = new TrivialPackageVersionModel(packageId, version: null);
+                var versionModel = new ListPackageItemViewModel(package, currentUser: null);
 
                 // Act
-                var result = urlHelper.DeletePackageTemplate().Resolve(packageVM);
+                var idResult = urlHelper.PackageVersionAction(action, idModel);
+                var versionResult = urlHelper.PackageVersionAction(action, versionModel);
 
                 // Assert
-                Assert.Equal(urlHelper.DeletePackage(packageVM), result);
-            }
-        }
+                // Id
+                Assert.Equal("/packages/" + packageId + "/" + action, idResult);
+                Assert.Equal(urlHelper.PackageVersionAction(action, packageId, version: null), idResult);
+                Assert.Equal(caller(urlHelper, idModel), idResult);
 
-        public class TheManagePackageOwnersTemplateHelperMethod
-            : TestContainer
-        {
-            [Fact]
-            public void ResolvePathIsCorrect()
-            {
-                // Arrange
-                var package = new Package
-                {
-                    PackageRegistration = new PackageRegistration
-                    {
-                        Id = "TestPackageId"
-                    },
-                    Version = "1.0.0"
-                };
-
-                var urlHelper = TestUtility.MockUrlHelper();
-                var packageVM = new ListPackageItemViewModel(package, currentUser: null);
-
-                // Act
-                var result = urlHelper.ManagePackageOwnersTemplate().Resolve(packageVM);
-
-                // Assert
-                Assert.Equal(urlHelper.ManagePackageOwners(packageVM), result);
+                // Id and version
+                Assert.Equal("/packages/" + packageId + "/" + package.Version + "/" + action, versionResult);
+                Assert.Equal(urlHelper.PackageVersionAction(action, packageId, package.Version), versionResult);
+                Assert.Equal(urlHelper.PackageVersionActionTemplate(action).Resolve(versionModel), versionResult);
+                Assert.Equal(caller(urlHelper, versionModel), versionResult);
             }
         }
 
@@ -210,8 +258,8 @@ namespace NuGetGallery
             [InlineData("https://localhost/Account/SignIn?returnUrl=%2F", "https", "unittest.nuget.org", "https://unittest.nuget.org/Account/SignIn?returnUrl=%2F")]
             [InlineData("https://localhost/Account/SignInNuGetAccount?returnUrl=%2F", "https", "unittest.nuget.org", "https://unittest.nuget.org/Account/SignInNuGetAccount?returnUrl=%2F")]
             public void UsesConfiguredSiteRootInAbsoluteUri(
-                string returnUrl, 
-                string protocol, 
+                string returnUrl,
+                string protocol,
                 string hostName,
                 string expectedReturnUrl)
             {

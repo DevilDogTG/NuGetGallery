@@ -7,10 +7,12 @@ using System.Net;
 using System.Threading.Tasks;
 using System.Web;
 using System.Web.Mvc;
+using NuGet.Services.Entities;
+using NuGet.Services.Messaging.Email;
+using NuGetGallery.Areas.Admin.ViewModels;
 using NuGetGallery.Authentication;
 using NuGetGallery.Filters;
 using NuGetGallery.Helpers;
-using NuGetGallery.Infrastructure.Mail;
 using NuGetGallery.Infrastructure.Mail.Messages;
 using NuGetGallery.Security;
 
@@ -47,6 +49,8 @@ namespace NuGetGallery
 
         public IMessageServiceConfiguration MessageServiceConfiguration { get; }
 
+        public IDeleteAccountService DeleteAccountService { get; }
+
         public AccountsController(
             AuthenticationService authenticationService,
             IPackageService packageService,
@@ -56,7 +60,8 @@ namespace NuGetGallery
             ISecurityPolicyService securityPolicyService,
             ICertificateService certificateService,
             IContentObjectService contentObjectService,
-            IMessageServiceConfiguration messageServiceConfiguration)
+            IMessageServiceConfiguration messageServiceConfiguration,
+            IDeleteAccountService deleteAccountService)
         {
             AuthenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
             PackageService = packageService ?? throw new ArgumentNullException(nameof(packageService));
@@ -67,6 +72,7 @@ namespace NuGetGallery
             CertificateService = certificateService ?? throw new ArgumentNullException(nameof(certificateService));
             ContentObjectService = contentObjectService ?? throw new ArgumentNullException(nameof(contentObjectService));
             MessageServiceConfiguration = messageServiceConfiguration ?? throw new ArgumentNullException(nameof(messageServiceConfiguration));
+            DeleteAccountService = deleteAccountService ?? throw new ArgumentNullException(nameof(deleteAccountService));
         }
 
         public abstract string AccountAction { get; }
@@ -105,12 +111,19 @@ namespace NuGetGallery
                 return new HttpStatusCodeResult(HttpStatusCode.Forbidden, Strings.Unauthorized);
             }
 
-            var alreadyConfirmed = account.UnconfirmedEmailAddress == null;
+            var hasUnconfirmedEmailAddress = account.UnconfirmedEmailAddress != null;
 
             ConfirmationViewModel model;
-            if (!alreadyConfirmed)
+            if (hasUnconfirmedEmailAddress)
             {
-                await SendNewAccountEmailAsync(account);
+                if (account.EmailAddress == null)
+                {
+                    await SendNewAccountEmailAsync(account);
+                }
+                else
+                {
+                    await SendEmailChangedConfirmationNoticeAsync(account);
+                }
 
                 model = new ConfirmationViewModel(account)
                 {
@@ -131,7 +144,7 @@ namespace NuGetGallery
         {
             // We don't want Login to go to this page as a return URL
             // By having this value present in the dictionary BUT null, we don't put "returnUrl" on the Login link at all
-            ViewData[Constants.ReturnUrlViewDataKey] = null;
+            ViewData[GalleryConstants.ReturnUrlViewDataKey] = null;
 
             var account = GetAccount(accountName);
 
@@ -308,6 +321,48 @@ namespace NuGetGallery
 
             return View("DeleteAccount", GetDeleteAccountViewModel(accountToDelete));
         }
+
+        [HttpGet]
+        [UIAuthorize(Roles = "Admins")]
+        public virtual ActionResult Delete(string accountName)
+        {
+            var accountToDelete = UserService.FindByUsername(accountName) as TUser;
+            if (accountToDelete == null || accountToDelete.IsDeleted)
+            {
+                return HttpNotFound();
+            }
+
+            return View(GetDeleteAccountViewName(), GetDeleteAccountViewModel(accountToDelete));
+        }
+
+        [HttpDelete]
+        [UIAuthorize(Roles = "Admins")]
+        [RequiresAccountConfirmation("Delete account")]
+        [ValidateAntiForgeryToken]
+        public virtual async Task<ActionResult> Delete(DeleteAccountAsAdminViewModel model)
+        {
+            var accountToDelete = UserService.FindByUsername(model.AccountName) as TUser;
+            if (accountToDelete == null || accountToDelete.IsDeleted)
+            {
+                return View("DeleteAccountStatus", new DeleteAccountStatus()
+                {
+                    AccountName = model.AccountName,
+                    Description = $"Account {model.AccountName} not found.",
+                    Success = false
+                });
+            }
+            else
+            {
+                var admin = GetCurrentUser();
+                var status = await DeleteAccountService.DeleteAccountAsync(
+                    userToBeDeleted: accountToDelete,
+                    userToExecuteTheDelete: admin,
+                    orphanPackagePolicy: model.ShouldUnlist ? AccountDeletionOrphanPackagePolicy.UnlistOrphans : AccountDeletionOrphanPackagePolicy.KeepOrphans);
+                return View("DeleteAccountStatus", status);
+            }
+        }
+
+        protected abstract string GetDeleteAccountViewName();
 
         protected abstract DeleteAccountViewModel<TUser> GetDeleteAccountViewModel(TUser account);
 

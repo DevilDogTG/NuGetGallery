@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Web;
 using Moq;
+using NuGet.Services.Entities;
 using NuGetGallery.Auditing;
 using Xunit;
 
@@ -208,7 +209,7 @@ namespace NuGetGallery.Services
                 .Returns(Task.CompletedTask);
             _fileStorageService.Setup(
                 x => x.SaveFileAsync(
-                    It.Is<string>(folderName => folderName == CoreConstants.UserCertificatesFolderName),
+                    It.Is<string>(folderName => folderName == CoreConstants.Folders.UserCertificatesFolderName),
                     It.Is<string>(fileName => fileName == $"SHA-256/{_sha256Thumbprint}.cer"),
                     It.IsNotNull<Stream>(),
                     It.Is<bool>(overwrite => overwrite == false)))
@@ -308,7 +309,7 @@ namespace NuGetGallery.Services
             _certificateRepository.Setup(x => x.GetAll())
                 .Returns(new EnumerableQuery<Certificate>(new[] { _certificate }));
 
-            var userCertificates = new Mock<IDbSet<UserCertificate>>(MockBehavior.Strict);
+            var userCertificates = new Mock<DbSet<UserCertificate>>(MockBehavior.Strict);
             var userCertificate = new UserCertificate()
             {
                 Key = 7,

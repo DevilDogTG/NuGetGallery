@@ -1,14 +1,13 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Web;
 using System.Web.Http;
 using System.Web.Http.Dependencies;
 using System.Web.Http.Routing;
 using Moq;
+using NuGet.Services.Entities;
 using NuGetGallery.Configuration;
 using NuGetGallery.Controllers;
 
@@ -32,13 +31,13 @@ namespace NuGetGallery.TestUtils.Infrastructure
             return httpContext.Object;
         }
 
-        public static Mock<IEntityRepository<Package>> SetupTestPackageRepository()
+        public static Mock<IReadOnlyEntityRepository<Package>> SetupTestPackageRepository()
         {
             var fooPackage = new PackageRegistration { Id = "Foo" };
             var barPackage = new PackageRegistration { Id = "Bar" };
             var bazPackage = new PackageRegistration { Id = "Baz" };
 
-            var repo = new Mock<IEntityRepository<Package>>(MockBehavior.Strict);
+            var repo = new Mock<IReadOnlyEntityRepository<Package>>(MockBehavior.Strict);
             repo.Setup(r => r.GetAll()).Returns(new[]
             {
                 new Package

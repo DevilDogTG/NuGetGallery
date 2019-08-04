@@ -1,20 +1,6 @@
 ﻿$(function () {
     'use strict';
 
-    window.nuget.configureExpander(
-        "package-owners",
-        "ChevronRight",
-        "Current Owners",
-        "ChevronDown",
-        "Current Owners");
-
-    window.nuget.configureExpander(
-        "add-owner",
-        "ChevronRight",
-        "Add Owner",
-        "ChevronDown",
-        "Add Owner");
-
     var failHandler = function (jqXHR, textStatus, errorThrown) {
         viewModel.message(window.nuget.formatString(errorThrown));
     };
@@ -144,7 +130,7 @@
                     }
                 }
             })
-            .error(failHandler);
+            .fail(failHandler);
         },
 
         removeOwner: function (item) {
@@ -184,11 +170,11 @@
                     }
                 }
             })
-            .error(failHandler);
+            .fail(failHandler);
         }
     };
 
-    ko.applyBindings(viewModel);
+    ko.applyBindings(viewModel, $(".page-manage-owners")[0]);
 
     // Load initial owners.
     $.ajax({
@@ -200,7 +186,7 @@
             viewModel.owners($.map(data, function (item) { return new Owner(item); }));
         }
     })
-    .error(failHandler);
+    .fail(failHandler);
 
     function Owner(data) {
         this.name = ko.observable(data.Name);

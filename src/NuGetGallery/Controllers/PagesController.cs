@@ -8,11 +8,10 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using System.Web;
 using System.Web.Mvc;
+using NuGet.Services.Messaging.Email;
 using NuGetGallery.Areas.Admin;
 using NuGetGallery.Filters;
-using NuGetGallery.Infrastructure.Mail;
 using NuGetGallery.Infrastructure.Mail.Messages;
-using NuGetGallery.Infrastructure.Mail.Requests;
 using NuGetGallery.ViewModels;
 
 namespace NuGetGallery
@@ -75,6 +74,7 @@ namespace NuGetGallery
         [HttpPost]
         [UIAuthorize]
         [ValidateAntiForgeryToken]
+        [ValidateRecaptchaResponse]
         public virtual async Task<ActionResult> Contact(ContactSupportViewModel contactForm)
         {
             if (!ModelState.IsValid)
@@ -132,7 +132,7 @@ namespace NuGetGallery
             if (_contentService != null)
             {
                 ViewBag.Content = await _contentService.GetContentItemAsync(
-                    Constants.ContentNames.TermsOfUse,
+                    GalleryConstants.ContentNames.TermsOfUse,
                     TimeSpan.FromDays(1));
             }
             return View();
@@ -144,10 +144,16 @@ namespace NuGetGallery
             if (_contentService != null)
             {
                 ViewBag.Content = await _contentService.GetContentItemAsync(
-                    Constants.ContentNames.PrivacyPolicy,
+                    GalleryConstants.ContentNames.PrivacyPolicy,
                     TimeSpan.FromDays(1));
             }
             return View();
+        }
+
+        [HttpGet]
+        public virtual ActionResult SimulateError(SimulatedErrorType type = SimulatedErrorType.Exception)
+        {
+            return type.MapToMvcResult();
         }
     }
 }

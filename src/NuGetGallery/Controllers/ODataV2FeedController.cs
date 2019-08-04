@@ -10,9 +10,10 @@ using System.Web.Http;
 using System.Web.Http.OData;
 using System.Web.Http.OData.Query;
 using NuGet.Frameworks;
+using NuGet.Services.Entities;
 using NuGet.Versioning;
 using NuGetGallery.Configuration;
-using NuGetGallery.Infrastructure.Lucene;
+using NuGetGallery.Infrastructure.Search;
 using NuGetGallery.OData;
 using NuGetGallery.OData.QueryFilter;
 using NuGetGallery.OData.QueryInterceptors;
@@ -28,19 +29,26 @@ namespace NuGetGallery.Controllers
     {
         private const int MaxPageSize = SearchAdaptor.MaxPageSize;
 
-        private readonly IEntityRepository<Package> _packagesRepository;
+        private readonly IReadOnlyEntityRepository<Package> _packagesRepository;
+        private readonly IEntityRepository<Package> _readWritePackagesRepository;
         private readonly IGalleryConfigurationService _configurationService;
         private readonly ISearchService _searchService;
+        private readonly IFeatureFlagService _featureFlagService;
 
         public ODataV2FeedController(
-            IEntityRepository<Package> packagesRepository,
+            IReadOnlyEntityRepository<Package> packagesRepository,
+            IEntityRepository<Package> readWritePackagesRepository,
             IGalleryConfigurationService configurationService,
-            ISearchService searchService)
-            : base(configurationService)
+            ISearchService searchService,
+            ITelemetryService telemetryService,
+            IFeatureFlagService featureFlagService)
+            : base(configurationService, telemetryService)
         {
-            _packagesRepository = packagesRepository;
-            _configurationService = configurationService;
-            _searchService = searchService;
+            _packagesRepository = packagesRepository ?? throw new ArgumentNullException(nameof(packagesRepository));
+            _readWritePackagesRepository = readWritePackagesRepository ?? throw new ArgumentNullException(nameof(readWritePackagesRepository));
+            _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
+            _searchService = searchService ?? throw new ArgumentNullException(nameof(searchService));
+            _featureFlagService = featureFlagService ?? throw new ArgumentNullException(nameof(featureFlagService));
         }
 
         // /api/v2/Packages?semVerLevel=
@@ -52,14 +60,15 @@ namespace NuGetGallery.Controllers
             [FromUri]string semVerLevel = null)
         {
             // Setup the search
-            var packages = _packagesRepository.GetAll()
-                                .Where(p => p.PackageStatusKey == PackageStatus.Available)
-                                .Where(SemVerLevelKey.IsPackageCompliantWithSemVerLevelPredicate(semVerLevel))
-                                .WithoutSortOnColumn(Version)
-                                .WithoutSortOnColumn(Id, ShouldIgnoreOrderById(options))
-                                .InterceptWith(new NormalizeVersionInterceptor());
+            var packages = GetAll()
+                            .Where(p => p.PackageStatusKey == PackageStatus.Available)
+                            .Where(SemVerLevelKey.IsPackageCompliantWithSemVerLevelPredicate(semVerLevel))
+                            .WithoutSortOnColumn(Version)
+                            .WithoutSortOnColumn(Id, ShouldIgnoreOrderById(options))
+                            .InterceptWith(new NormalizeVersionInterceptor());
 
             var semVerLevelKey = SemVerLevelKey.ForSemVerLevel(semVerLevel);
+            bool? customQuery = null;
 
             // Try the search service
             try
@@ -72,13 +81,14 @@ namespace NuGetGallery.Controllers
                         GetTraditionalHttpContext().Request, 
                         packages,
                         hijackableQueryParameters.Id, 
-                        hijackableQueryParameters.Version, 
-                        curatedFeed: null,
+                        hijackableQueryParameters.Version,
                         semVerLevel: semVerLevel);
 
                     // If intercepted, create a paged queryresult
                     if (searchAdaptorResult.ResultsAreProvidedBySearchService)
                     {
+                        customQuery = false;
+
                         // Packages provided by search service
                         packages = searchAdaptorResult.Packages;
 
@@ -91,9 +101,22 @@ namespace NuGetGallery.Controllers
                                 _configurationService.Features.FriendlyLicenses,
                                 semVerLevelKey);
 
-                        return QueryResult(options, pagedQueryable, MaxPageSize, totalHits, (o, s, resultCount) =>
-                           SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, null, o, s, semVerLevelKey));
+                        return TrackedQueryResult(
+                            options,
+                            pagedQueryable,
+                            MaxPageSize,
+                            totalHits,
+                            (o, s, resultCount) => SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, null, o, s, semVerLevelKey),
+                            customQuery);
                     }
+                    else
+                    {
+                        customQuery = true;
+                    }
+                }
+                else
+                {
+                    customQuery = true;
                 }
             }
             catch (Exception ex)
@@ -115,7 +138,7 @@ namespace NuGetGallery.Controllers
                 _configurationService.Features.FriendlyLicenses, 
                 semVerLevelKey);
 
-            return QueryResult(options, queryable, MaxPageSize);
+            return TrackedQueryResult(options, queryable, MaxPageSize, customQuery);
         }
 
         // /api/v2/Packages/$count?semVerLevel=
@@ -168,7 +191,7 @@ namespace NuGetGallery.Controllers
                         _configurationService.Features.FriendlyLicenses, 
                         semVerLevelKey);
 
-                return QueryResult(options, emptyResult, MaxPageSize);
+                return TrackedQueryResult(options, emptyResult, MaxPageSize, customQuery: false);
             }
 
             return await GetCore(
@@ -197,7 +220,7 @@ namespace NuGetGallery.Controllers
             string semVerLevel,
             bool return404NotFoundWhenNoResults)
         {
-            var packages = _packagesRepository.GetAll()
+            var packages = GetAll()
                 .Include(p => p.PackageRegistration)
                 .Where(p => p.PackageStatusKey == PackageStatus.Available
                             && p.PackageRegistration.Id.Equals(id, StringComparison.OrdinalIgnoreCase))
@@ -216,6 +239,7 @@ namespace NuGetGallery.Controllers
             }
 
             var semVerLevelKey = SemVerLevelKey.ForSemVerLevel(semVerLevel);
+            bool? customQuery = null;
 
             // try the search service
             try
@@ -226,12 +250,13 @@ namespace NuGetGallery.Controllers
                     packages, 
                     id, 
                     version, 
-                    curatedFeed: null,
                     semVerLevel: semVerLevel);
 
                 // If intercepted, create a paged queryresult
                 if (searchAdaptorResult.ResultsAreProvidedBySearchService)
                 {
+                    customQuery = false;
+
                     // Packages provided by search service
                     packages = searchAdaptorResult.Packages;
 
@@ -240,6 +265,7 @@ namespace NuGetGallery.Controllers
 
                     if (totalHits == 0 && return404NotFoundWhenNoResults)
                     {
+                        _telemetryService.TrackODataCustomQuery(customQuery);
                         return NotFound();
                     }
 
@@ -250,8 +276,17 @@ namespace NuGetGallery.Controllers
                             _configurationService.Features.FriendlyLicenses, 
                             semVerLevelKey);
 
-                    return QueryResult(options, pagedQueryable, MaxPageSize, totalHits, (o, s, resultCount) =>
-                       SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { id }, o, s, semVerLevelKey));
+                    return TrackedQueryResult(
+                        options,
+                        pagedQueryable,
+                        MaxPageSize,
+                        totalHits,
+                        (o, s, resultCount) => SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { id }, o, s, semVerLevelKey),
+                        customQuery);
+                }
+                else
+                {
+                    customQuery = true;
                 }
             }
             catch (Exception ex)
@@ -263,6 +298,7 @@ namespace NuGetGallery.Controllers
 
             if (return404NotFoundWhenNoResults && !packages.Any())
             {
+                _telemetryService.TrackODataCustomQuery(customQuery);
                 return NotFound();
             }
 
@@ -271,7 +307,7 @@ namespace NuGetGallery.Controllers
                 _configurationService.Features.FriendlyLicenses, 
                 semVerLevelKey);
 
-            return QueryResult(options, queryable, MaxPageSize);
+            return TrackedQueryResult(options, queryable, MaxPageSize, customQuery);
         }
 
         // /api/v2/Packages(Id=,Version=)/propertyName
@@ -316,7 +352,7 @@ namespace NuGetGallery.Controllers
             }
 
             // Perform actual search
-            var packages = _packagesRepository.GetAll()
+            var packages = GetAll()
                 .Include(p => p.PackageRegistration)
                 .Include(p => p.PackageRegistration.Owners)
                 .Where(p => p.Listed && p.PackageStatusKey == PackageStatus.Available)
@@ -332,17 +368,19 @@ namespace NuGetGallery.Controllers
                 searchTerm, 
                 targetFramework, 
                 includePrerelease, 
-                curatedFeed: null,
                 semVerLevel: semVerLevel);
 
             // Packages provided by search service (even when not hijacked)
             var query = searchAdaptorResult.Packages;
 
             var semVerLevelKey = SemVerLevelKey.ForSemVerLevel(semVerLevel);
+            bool? customQuery = null;
 
             // If intercepted, create a paged queryresult
             if (searchAdaptorResult.ResultsAreProvidedBySearchService)
             {
+                customQuery = false;
+
                 // Add explicit Take() needed to limit search hijack result set size if $top is specified
                 var totalHits = query.LongCount();
                 var pagedQueryable = query
@@ -352,17 +390,28 @@ namespace NuGetGallery.Controllers
                         _configurationService.Features.FriendlyLicenses, 
                         semVerLevelKey);
 
-                return QueryResult(options, pagedQueryable, MaxPageSize, totalHits, (o, s, resultCount) =>
-                {
-                    // The nuget.exe 2.x list command does not like the next link at the bottom when a $top is passed.
-                    // Strip it of for backward compatibility.
-                    if (o.Top == null || (resultCount.HasValue && o.Top.Value >= resultCount.Value))
-                    {
-                        return SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { searchTerm, targetFramework, includePrerelease }, o, s, semVerLevelKey);
-                    }
-                    return null;
-                });
+                return TrackedQueryResult(
+                    options,
+                    pagedQueryable,
+                    MaxPageSize,
+                    totalHits,
+                    (o, s, resultCount) =>
+                        {
+                            // The nuget.exe 2.x list command does not like the next link at the bottom when a $top is passed.
+                            // Strip it of for backward compatibility.
+                            if (o.Top == null || (resultCount.HasValue && o.Top.Value >= resultCount.Value))
+                            {
+                                return SearchAdaptor.GetNextLink(Request.RequestUri, resultCount, new { searchTerm, targetFramework, includePrerelease }, o, s, semVerLevelKey);
+                            }
+                            return null;
+                        },
+                    customQuery);
             }
+            else
+            {
+                customQuery = true;
+            }
+
             //Reject only when try to reach database.
             if (!ODataQueryVerifier.AreODataOptionsAllowed(options, ODataQueryVerifier.V2Search,
                 _configurationService.Current.IsODataFilterEnabled, nameof(Search)))
@@ -376,7 +425,7 @@ namespace NuGetGallery.Controllers
                 _configurationService.Features.FriendlyLicenses, 
                 semVerLevelKey);
 
-            return QueryResult(options, queryable, MaxPageSize);
+            return TrackedQueryResult(options, queryable, MaxPageSize, customQuery);
         }
 
         // /api/v2/Search()/$count?searchTerm=&targetFramework=&includePrerelease=&semVerLevel=
@@ -413,7 +462,11 @@ namespace NuGetGallery.Controllers
         {
             if (string.IsNullOrEmpty(packageIds) || string.IsNullOrEmpty(versions))
             {
-                return Ok(Enumerable.Empty<V2FeedPackage>().AsQueryable());
+                return TrackedQueryResult(
+                    options,
+                    Enumerable.Empty<V2FeedPackage>().AsQueryable(),
+                    MaxPageSize,
+                    customQuery: false);
             }
 
             if (!ODataQueryVerifier.AreODataOptionsAllowed(options, ODataQueryVerifier.V2GetUpdates,
@@ -443,7 +496,11 @@ namespace NuGetGallery.Controllers
             if (idValues.Length == 0 || idValues.Length != versionValues.Length || idValues.Length != versionConstraintValues.Length)
             {
                 // Exit early if the request looks invalid
-                return Ok(Enumerable.Empty<V2FeedPackage>().AsQueryable());
+                return TrackedQueryResult(
+                    options,
+                    Enumerable.Empty<V2FeedPackage>().AsQueryable(),
+                    MaxPageSize,
+                    customQuery: false);
             }
 
             var versionLookup = idValues.Select((id, i) =>
@@ -466,7 +523,7 @@ namespace NuGetGallery.Controllers
                 .Where(t => t != null)
                 .ToLookup(t => t.Item1, t => t.Item2, StringComparer.OrdinalIgnoreCase);
 
-            var packages = _packagesRepository.GetAll()
+            var packages = GetAll()
                 .Include(p => p.PackageRegistration)
                 .Include(p => p.SupportedFrameworks)
                 .Where(p => p.Listed && (includePrerelease || !p.IsPrerelease)
@@ -482,7 +539,7 @@ namespace NuGetGallery.Controllers
                     _configurationService.Features.FriendlyLicenses, 
                     semVerLevelKey);
 
-            return QueryResult(options, queryable, MaxPageSize);
+            return TrackedQueryResult(options, queryable, MaxPageSize, customQuery: false);
         }
 
         // /api/v2/GetUpdates()/$count?packageIds=&versions=&includePrerelease=&includeAllVersions=&targetFrameworks=&versionConstraints=&semVerLevel=
@@ -545,6 +602,15 @@ namespace NuGetGallery.Controllers
             }
 
             return updates;
+        }
+
+        internal IQueryable<Package> GetAll()
+        {
+            if (_featureFlagService.IsODataDatabaseReadOnlyEnabled())
+            {
+                return _packagesRepository.GetAll();
+            }
+            return _readWritePackagesRepository.GetAll();
         }
     }
 }

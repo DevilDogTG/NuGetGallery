@@ -1,11 +1,12 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using Moq;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Collections.Generic;
+using Moq;
+using NuGet.Services.Entities;
 using NuGetGallery.Auditing;
 using NuGetGallery.Framework;
 using NuGetGallery.TestUtils;
@@ -98,7 +99,7 @@ namespace NuGetGallery.Services
             {
                 var service = new TestableReservedNamespaceService();
                 var addNamespace = new ReservedNamespace(value, isSharedNamespace: false, isPrefix: true);
-                await Assert.ThrowsAsync<ArgumentException>(async () => await service.AddReservedNamespaceAsync(addNamespace));
+                await Assert.ThrowsAsync<InvalidOperationException>(async () => await service.AddReservedNamespaceAsync(addNamespace));
             }
 
             [Theory]
@@ -109,7 +110,7 @@ namespace NuGetGallery.Services
             {
                 var service = new TestableReservedNamespaceService();
                 var addNamespace = new ReservedNamespace(value, isSharedNamespace: false, isPrefix: true);
-                await Assert.ThrowsAsync<ArgumentException>(async () => await service.AddReservedNamespaceAsync(addNamespace));
+                await Assert.ThrowsAsync<InvalidOperationException>(async () => await service.AddReservedNamespaceAsync(addNamespace));
             }
 
             [Fact]
@@ -168,7 +169,7 @@ namespace NuGetGallery.Services
             public async Task WritesAnAuditRecord()
             {
                 var newNamespace = new ReservedNamespace("Microsoft.", isSharedNamespace: false, isPrefix: true);
-                
+
                 var service = new TestableReservedNamespaceService();
                 await service.AddReservedNamespaceAsync(newNamespace);
 
@@ -527,7 +528,7 @@ namespace NuGetGallery.Services
                 var service = new TestableReservedNamespaceService(reservedNamespaces: testNamespaces, packageRegistrations: testPackageRegistrations);
 
                 service.AddPackageRegistrationToNamespace(existingNamespace.Value, existingReg);
-                
+
                 Assert.True(existingNamespace.PackageRegistrations.Contains(existingReg));
             }
 
@@ -744,7 +745,7 @@ namespace NuGetGallery.Services
                 service
                     .MockPackageService
                     .Verify(p => p.UpdatePackageVerifiedStatusAsync(
-                        It.IsAny<IReadOnlyCollection<PackageRegistration>>(), It.IsAny<bool>(), true),
+                        It.IsAny<IReadOnlyCollection<PackageRegistration>>(), It.IsAny<bool>(), false),
                         Times.Once);
 
                 Assert.False(existingNamespace.Owners.Contains(owner1));
@@ -789,7 +790,7 @@ namespace NuGetGallery.Services
                 service
                     .MockPackageService
                     .Verify(p => p.UpdatePackageVerifiedStatusAsync(
-                        It.IsAny<IReadOnlyCollection<PackageRegistration>>(), It.IsAny<bool>(), true),
+                        It.IsAny<IReadOnlyCollection<PackageRegistration>>(), It.IsAny<bool>(), false),
                         Times.Once);
 
                 Assert.False(existingNamespace.Owners.Contains(owner1));
@@ -968,6 +969,7 @@ namespace NuGetGallery.Services
             [InlineData("Cont@ins$pecia|C#aracters")]
             [InlineData("Endswithperods..")]
             [InlineData("Multiple.Sequential..Periods.")]
+            [InlineData("Multiple-Sequential--hyphens")]
             public void InvalidNamespacesThrowsException(string value)
             {
                 Assert.Throws<ArgumentException>(() => ReservedNamespaceService.ValidateNamespace(value));
@@ -979,6 +981,9 @@ namespace NuGetGallery.Services
             [InlineData("Name.Space.")]
             [InlineData("123_Name.space.")]
             [InlineData("123-Namespace.")]
+            [InlineData("123-Namespace-endswith-hyphen-")]
+            [InlineData("123_Namespace_endswith_Underscores_")]
+            [InlineData("Multiple_Sequential__Underscores")]
             public void ValidNamespacesDontThrowException(string value)
             {
                 var ex = Record.Exception(() => ReservedNamespaceService.ValidateNamespace(value));
