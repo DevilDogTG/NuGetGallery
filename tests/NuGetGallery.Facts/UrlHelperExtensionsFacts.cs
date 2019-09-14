@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Web.Mvc;
 using System.Web.Routing;
+using Moq;
 using NuGet.Services.Entities;
 using NuGetGallery.Framework;
 using Xunit;
@@ -117,7 +118,7 @@ namespace NuGetGallery
 
                 // Act
                 var result = urlHelper.PackageRegistrationTemplate()
-                    .Resolve(new ListPackageItemViewModel(package, currentUser: null));
+                    .Resolve(new ListPackageItemViewModelFactory(Mock.Of<IIconUrlProvider>()).Create(package, currentUser: null));
 
                 // Assert
                 Assert.Equal(urlHelper.Package(package.PackageRegistration), result);
@@ -136,27 +137,6 @@ namespace NuGetGallery
                         nameof(PackagesController.Manage),
                         new Func<UrlHelper, IPackageVersionModel, string>(
                             (url, package) => url.ManagePackage(package))
-                    };
-
-                    yield return new object[]
-                    {
-                        nameof(PackagesController.Reflow),
-                        new Func<UrlHelper, IPackageVersionModel, string>(
-                            (url, package) => url.ReflowPackage(package))
-                    };
-
-                    yield return new object[]
-                    {
-                        nameof(PackagesController.Revalidate),
-                        new Func<UrlHelper, IPackageVersionModel, string>(
-                            (url, package) => url.RevalidatePackage(package))
-                    };
-
-                    yield return new object[]
-                    {
-                        nameof(PackagesController.RevalidateSymbols),
-                        new Func<UrlHelper, IPackageVersionModel, string>(
-                            (url, package) => url.RevalidateSymbolsPackage(package))
                     };
 
                     yield return new object[]
@@ -207,7 +187,7 @@ namespace NuGetGallery
                 var urlHelper = TestUtility.MockUrlHelper();
                 
                 var idModel = new TrivialPackageVersionModel(packageId, version: null);
-                var versionModel = new ListPackageItemViewModel(package, currentUser: null);
+                var versionModel = new ListPackageItemViewModelFactory(Mock.Of<IIconUrlProvider>()).Create(package, currentUser: null);
 
                 // Act
                 var idResult = urlHelper.PackageVersionAction(action, idModel);

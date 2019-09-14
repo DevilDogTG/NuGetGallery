@@ -1,4 +1,5 @@
 ﻿@using System.Web.Mvc
+@using System.Web.Mvc.Html
 @using System.Web.Routing
 @using NuGetGallery
 @using NuGetGallery.Helpers
@@ -230,10 +231,10 @@
         });
 }
 
-@helper UserLinkWithIcon(UrlHelper url, User user)
+@helper UserLinkWithIcon(UrlHelper url, BasicUserViewModel user)
 {
     <span class="ms-noWrap">
-        @if (user is Organization)
+        @if (user.IsOrganization)
         {
             <i class="ms-Icon ms-Icon--Group" aria-hidden="true"></i>
         }
@@ -585,10 +586,10 @@ var hlp = new AccordionHelper(name, formModelStatePrefix, expanded, page);
 
 @helper Breadcrumb(bool showDivider, params Func<MvcHtmlString, HelperResult>[] segments)
 {
-    <h1 class="ms-font-xl breadcrumb-title">
+    <h1 role="list" class="ms-font-xl breadcrumb-title">
         @for (int i = 0; i < segments.Length; i++)
         {
-            <span class="ms-noWrap">@segments[i](MvcHtmlString.Empty)</span>
+            <span role="listitem" class="ms-noWrap">@segments[i](MvcHtmlString.Empty)</span>
 
             if (i < segments.Length - 1)
             {
@@ -632,25 +633,81 @@ var hlp = new AccordionHelper(name, formModelStatePrefix, expanded, page);
     @BreadcrumbWithProfile(url, currentUser, showDivider, newSegments);
 }
 
-@helper RecatpchaScripts(string reCaptchaPublicKey, string submitId)
+@helper RecaptchaScripts(string reCaptchaPublicKey, string submitId)
 {
     if (!string.IsNullOrEmpty(reCaptchaPublicKey))
     {
         <script src='https://www.google.com/recaptcha/api.js' async defer></script>
         <script type="text/javascript">
             var $submit = $('@("#" + submitId)');
-            $submit.addClass("g-recaptcha");
-            $submit.attr({
-                'data-sitekey': "@reCaptchaPublicKey",
-                'data-size': "invisible",
-                'data-callback': "onSubmit",
-                'data-tabindex': "-1"
+            $submit.before(
+                '<div id="recaptcha" class="g-recaptcha" '
+                + 'data-sitekey="@reCaptchaPublicKey" data-size="invisible" '
+                + 'data-callback="onSubmit" data-tabindex="-1"></div>');
+
+            var $form = $submit.parents('form')
+            $submit.click(function (e) {
+                if ($form.valid()) {
+                    e.preventDefault();
+                    grecaptcha.execute();
+                }
             });
+
             function onSubmit(token) {
-                $submit.parents('form').submit();
+                $form.submit();
             }
         </script>
     }
+}
+
+@helper PostLink(
+    System.Web.Mvc.WebViewPage page,
+    string formId,
+    Func<MvcHtmlString, HelperResult> htmlContent,
+    string actionName,
+    string controllerName,
+    string role,
+    string area = "",
+    Dictionary<string, string> formValues = null)
+{
+    using (page.Html.BeginForm(
+        actionName,
+        controllerName,
+        new { area = area },
+        FormMethod.Post,
+        new { id = formId }))
+    {
+        @page.Html.AntiForgeryToken();
+        if (formValues != null)
+        {
+            foreach (var pair in formValues)
+            {
+                <input type="hidden" name="@pair.Key" value="@pair.Value" />
+            }
+        }
+    }
+    <a href="#" class="post-link" data-form-id="@formId" role="@role">@htmlContent(MvcHtmlString.Empty)</a>
+}
+
+@helper PostLink(
+    System.Web.Mvc.WebViewPage page,
+    string formId,
+    string linkText,
+    string actionName,
+    string controllerName,
+    string role,
+    string area = "",
+    Dictionary<string, string> formValues = null)
+{
+    @PostLink(
+        page,
+        formId,
+        @<text>@linkText</text>,
+        actionName,
+        controllerName,
+        role,
+        area,
+        formValues);
 }
 
 @functions

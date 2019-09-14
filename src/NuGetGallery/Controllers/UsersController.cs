@@ -29,7 +29,10 @@ namespace NuGetGallery
         private readonly IPackageOwnerRequestService _packageOwnerRequestService;
         private readonly IAppConfiguration _config;
         private readonly ICredentialBuilder _credentialBuilder;
+        private readonly ListPackageItemRequiredSignerViewModelFactory _listPackageItemRequiredSignerViewModelFactory;
+        private readonly ListPackageItemViewModelFactory _listPackageItemViewModelFactory;
         private readonly ISupportRequestService _supportRequestService;
+        private readonly IFeatureFlagService _featureFlagService;
 
         public UsersController(
             IUserService userService,
@@ -45,7 +48,9 @@ namespace NuGetGallery
             ISecurityPolicyService securityPolicyService,
             ICertificateService certificateService,
             IContentObjectService contentObjectService,
-            IMessageServiceConfiguration messageServiceConfiguration)
+            IFeatureFlagService featureFlagService,
+            IMessageServiceConfiguration messageServiceConfiguration,
+            IIconUrlProvider iconUrlProvider)
             : base(
                   authService,
                   packageService,
@@ -56,12 +61,17 @@ namespace NuGetGallery
                   certificateService,
                   contentObjectService,
                   messageServiceConfiguration,
-                  deleteAccountService)
+                  deleteAccountService,
+                  iconUrlProvider)
         {
             _packageOwnerRequestService = packageOwnerRequestService ?? throw new ArgumentNullException(nameof(packageOwnerRequestService));
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _credentialBuilder = credentialBuilder ?? throw new ArgumentNullException(nameof(credentialBuilder));
             _supportRequestService = supportRequestService ?? throw new ArgumentNullException(nameof(supportRequestService));
+            _featureFlagService = featureFlagService ?? throw new ArgumentNullException(nameof(featureFlagService));
+
+            _listPackageItemRequiredSignerViewModelFactory = new ListPackageItemRequiredSignerViewModelFactory(securityPolicyService, iconUrlProvider);
+            _listPackageItemViewModelFactory = new ListPackageItemViewModelFactory(iconUrlProvider);
         }
 
         public override string AccountAction => nameof(Account);
@@ -106,9 +116,9 @@ namespace NuGetGallery
 
         protected override string GetDeleteAccountViewName() => "DeleteUserAccount";
 
-        protected override DeleteAccountViewModel<User> GetDeleteAccountViewModel(User account)
+        protected override DeleteAccountViewModel GetDeleteAccountViewModel(User account)
         {
-            return new DeleteUserViewModel(account, GetCurrentUser(), PackageService, _supportRequestService);
+            return new DeleteUserViewModel(account, PackageService, GetOwnedPackagesViewModels(account), _supportRequestService);
         }
 
         [HttpGet]
@@ -120,7 +130,6 @@ namespace NuGetGallery
 
         [HttpGet]
         [UIAuthorize(allowDiscontinuedLogins: true)]
-        [ActionName(RouteName.TransformToOrganization)]
         public virtual ActionResult TransformToOrganization()
         {
             var accountToTransform = GetCurrentUser();
@@ -144,7 +153,6 @@ namespace NuGetGallery
         [HttpPost]
         [UIAuthorize(allowDiscontinuedLogins: true)]
         [ValidateAntiForgeryToken]
-        [ActionName(RouteName.TransformToOrganization)]
         public virtual async Task<ActionResult> TransformToOrganization(TransformAccountViewModel transformViewModel)
         {
             var accountToTransform = GetCurrentUser();
@@ -212,8 +220,20 @@ namespace NuGetGallery
 
         [HttpGet]
         [UIAuthorize(allowDiscontinuedLogins: true)]
-        [ActionName(RouteName.TransformToOrganizationConfirmation)]
+        public virtual async Task<ActionResult> ConfirmTransformToOrganizationRedirect(string accountNameToTransform, string token)
+        {
+            return await ConfirmTransformToOrganizationAsync(accountNameToTransform, token, redirect: true);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [UIAuthorize(allowDiscontinuedLogins: true)]
         public virtual async Task<ActionResult> ConfirmTransformToOrganization(string accountNameToTransform, string token)
+        {
+            return await ConfirmTransformToOrganizationAsync(accountNameToTransform, token, redirect: false);
+        }
+
+        private async Task<ActionResult> ConfirmTransformToOrganizationAsync(string accountNameToTransform, string token, bool redirect)
         {
             var adminUser = GetCurrentUser();
 
@@ -229,6 +249,22 @@ namespace NuGetGallery
             if (!UserService.CanTransformUserToOrganization(accountToTransform, out errorReason))
             {
                 return TransformToOrganizationFailed(errorReason);
+            }
+            
+            if (accountToTransform.OrganizationMigrationRequest != null
+                && accountToTransform.OrganizationMigrationRequest.ConfirmationToken == token
+                && !accountToTransform.OrganizationMigrationRequest.AdminUser.MatchesUser(adminUser))
+            {
+                return TransformToOrganizationFailed(string.Format(
+                    CultureInfo.CurrentCulture,
+                    Strings.TransformAccount_SignInToConfirm,
+                    accountToTransform.OrganizationMigrationRequest.AdminUser.Username,
+                    accountToTransform.Username));
+            }
+
+            if (redirect)
+            {
+                return Redirect(Url.ManageMyOrganizations());
             }
 
             if (!await UserService.TransformUserToOrganization(accountToTransform, adminUser, token))
@@ -250,8 +286,20 @@ namespace NuGetGallery
 
         [HttpGet]
         [UIAuthorize(allowDiscontinuedLogins: true)]
-        [ActionName(RouteName.TransformToOrganizationRejection)]
+        public virtual async Task<ActionResult> RejectTransformToOrganizationRedirect(string accountNameToTransform, string token)
+        {
+            return await RejectTransformToOrganizationAsync(accountNameToTransform, token, redirect: true);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [UIAuthorize(allowDiscontinuedLogins: true)]
         public virtual async Task<ActionResult> RejectTransformToOrganization(string accountNameToTransform, string token)
+        {
+            return await RejectTransformToOrganizationAsync(accountNameToTransform, token, redirect: false);
+        }
+
+        private async Task<ActionResult> RejectTransformToOrganizationAsync(string accountNameToTransform, string token, bool redirect)
         {
             var adminUser = GetCurrentUser();
 
@@ -264,6 +312,11 @@ namespace NuGetGallery
             }
             else
             {
+                if (redirect)
+                {
+                    return Redirect(Url.ManageMyOrganizations());
+                }
+
                 if (await UserService.RejectTransformUserToOrganizationRequest(accountToTransform, adminUser, token))
                 {
                     var emailMessage = new OrganizationTransformRejectedMessage(_config, accountToTransform, adminUser, isCanceledByAdmin: true);
@@ -287,11 +340,28 @@ namespace NuGetGallery
 
         [HttpGet]
         [UIAuthorize(allowDiscontinuedLogins: true)]
-        [ActionName(RouteName.TransformToOrganizationCancellation)]
+        public virtual async Task<ActionResult> CancelTransformToOrganizationRedirect(string token)
+        {
+            return await CancelTransformToOrganizationAsync(token, redirect: true);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [UIAuthorize(allowDiscontinuedLogins: true)]
         public virtual async Task<ActionResult> CancelTransformToOrganization(string token)
+        {
+            return await CancelTransformToOrganizationAsync(token, redirect: false);
+        }
+
+        private async Task<ActionResult> CancelTransformToOrganizationAsync(string token, bool redirect)
         {
             var accountToTransform = GetCurrentUser();
             var adminUser = accountToTransform.OrganizationMigrationRequest?.AdminUser;
+
+            if (redirect)
+            {
+                return Redirect(Url.ManageMyOrganizations());
+            }
 
             if (await UserService.CancelTransformUserToOrganizationRequest(accountToTransform, token))
             {
@@ -329,33 +399,48 @@ namespace NuGetGallery
             }
             TelemetryService.TrackRequestForAccountDeletion(user);
 
-            if (!user.Confirmed)
+            if (_config.SelfServiceAccountDeleteEnabled && _featureFlagService.IsSelfServiceAccountDeleteEnabled())
             {
-                // Unconfirmed users can be deleted immediately without creating a support request.
-                DeleteAccountStatus accountDeleteStatus = await DeleteAccountService.DeleteAccountAsync(userToBeDeleted: user,
-                    userToExecuteTheDelete: user,
-                    orphanPackagePolicy: AccountDeletionOrphanPackagePolicy.UnlistOrphans);
-                if (!accountDeleteStatus.Success)
-                {
-                    TempData["RequestFailedMessage"] = Strings.AccountSelfDelete_Fail;
-                    return RedirectToAction("DeleteRequest");
-                }
-                OwinContext.Authentication.SignOut();
-                return SafeRedirect(Url.Home(false));
-            }
-
-            var isSupportRequestCreated = await _supportRequestService.TryAddDeleteSupportRequestAsync(user);
-            if (isSupportRequestCreated)
-            {
-                var emailMessage = new AccountDeleteNoticeMessage(MessageServiceConfiguration, user);
-                await MessageService.SendMessageAsync(emailMessage);
+                return await DeleteAndCheckSuccess(user);
             }
             else
             {
-                TempData["RequestFailedMessage"] = Strings.AccountDelete_CreateSupportRequestFails;
-            }
+                if (!user.Confirmed)
+                {
+                    // Unconfirmed users can be deleted immediately without creating a support request.
+                    return await DeleteAndCheckSuccess(user);
+                }
 
-            return RedirectToAction(nameof(DeleteRequest));
+                var isSupportRequestCreated = await _supportRequestService.TryAddDeleteSupportRequestAsync(user);
+                if (isSupportRequestCreated)
+                {
+                    var emailMessage = new AccountDeleteNoticeMessage(MessageServiceConfiguration, user);
+                    await MessageService.SendMessageAsync(emailMessage);
+
+                    return RedirectToAction(nameof(DeleteRequest));
+                }
+                else
+                {
+                    TempData["RequestFailedMessage"] = Strings.AccountDelete_CreateSupportRequestFails;
+
+                    return RedirectToAction(nameof(DeleteRequest));
+                }
+            }
+        }
+
+        private async Task<ActionResult> DeleteAndCheckSuccess(User user)
+        {
+            DeleteAccountStatus accountDeleteStatus = await DeleteAccountService.DeleteAccountAsync(userToBeDeleted: user,
+                        userToExecuteTheDelete: user,
+                        orphanPackagePolicy: AccountDeletionOrphanPackagePolicy.UnlistOrphans);
+            if (!accountDeleteStatus.Success)
+            {
+                TempData["RequestFailedMessage"] = Strings.AccountSelfDelete_Fail;
+                return RedirectToAction("DeleteRequest");
+            }
+            OwinContext.Authentication.SignOut();
+            TempData["Message"] = Strings.AccountDelete_SelfServiceSuccess;
+            return SafeRedirect(Url.Home(false));
         }
 
         [HttpGet]
@@ -435,12 +520,12 @@ namespace NuGetGallery
             var packages = PackageService.FindPackagesByAnyMatchingOwner(currentUser, includeUnlisted: true);
             var listedPackages = packages
                 .Where(p => p.Listed && p.PackageStatusKey == PackageStatus.Available)
-                .Select(p => new ListPackageItemRequiredSignerViewModel(p, currentUser, SecurityPolicyService, wasAADLoginOrMultiFactorAuthenticated))
+                .Select(p => _listPackageItemRequiredSignerViewModelFactory.Create(p, currentUser, wasAADLoginOrMultiFactorAuthenticated))
                 .OrderBy(p => p.Id)
                 .ToList();
             var unlistedPackages = packages
                 .Where(p => !p.Listed || p.PackageStatusKey != PackageStatus.Available)
-                .Select(p => new ListPackageItemRequiredSignerViewModel(p, currentUser, SecurityPolicyService, wasAADLoginOrMultiFactorAuthenticated))
+                .Select(p => _listPackageItemRequiredSignerViewModelFactory.Create(p, currentUser, wasAADLoginOrMultiFactorAuthenticated))
                 .OrderBy(p => p.Id)
                 .ToList();
 
@@ -458,7 +543,7 @@ namespace NuGetGallery
                 .SelectMany(m => _packageOwnerRequestService.GetPackageOwnershipRequests(requestingOwner: m.Organization));
             var sent = userSent.Union(orgSent);
 
-            var ownerRequests = new OwnerRequestsViewModel(received, sent, currentUser, PackageService);
+            var ownerRequests = CreateOwnerRequestsViewModel(received, sent, currentUser);
 
             var userReservedNamespaces = currentUser.ReservedNamespaces;
             var organizationsReservedNamespaces = currentUser.Organizations.SelectMany(m => m.Organization.ReservedNamespaces);
@@ -613,9 +698,11 @@ namespace NuGetGallery
             var packages = PackageService.FindPackagesByOwner(user, includeUnlisted: false)
                 .Where(p => p.PackageStatusKey == PackageStatus.Available)
                 .OrderByDescending(p => p.PackageRegistration.DownloadCount)
-                .Select(p => new ListPackageItemViewModel(p, currentUser)
+                .Select(p =>
                 {
-                    DownloadCount = p.PackageRegistration.DownloadCount
+                    var viewModel = _listPackageItemViewModelFactory.Create(p, currentUser);
+                    viewModel.DownloadCount = p.PackageRegistration.DownloadCount;
+                    return viewModel;
                 }).ToList();
 
             var model = new UserProfileModel(user, currentUser, packages, page - 1, GalleryConstants.DefaultPackageListPageSize, Url);
@@ -1086,6 +1173,37 @@ namespace NuGetGallery
             await MessageService.SendMessageAsync(message);
 
             return RedirectToAction(actionName: "PasswordSent", controllerName: "Users");
+        }
+
+        private OwnerRequestsViewModel CreateOwnerRequestsViewModel(IEnumerable<PackageOwnerRequest> received, IEnumerable<PackageOwnerRequest> sent, User currentUser)
+        {
+            var viewModel = new OwnerRequestsViewModel
+            {
+                Received = new OwnerRequestsListViewModel
+                {
+                    Requests = received.Select(r => CreateOwnerRequestsListItemViewModel(r, currentUser)).ToList()
+                },
+                Sent = new OwnerRequestsListViewModel
+                {
+                    Requests = sent.Select(r => CreateOwnerRequestsListItemViewModel(r, currentUser)).ToList()
+                },
+            };
+
+            return viewModel;
+        }
+
+        private OwnerRequestsListItemViewModel CreateOwnerRequestsListItemViewModel(PackageOwnerRequest request, User currentUser)
+        {
+            var package = PackageService.FindPackageByIdAndVersion(request.PackageRegistration.Id, version: null, semVerLevelKey: SemVerLevelKey.SemVer2, allowPrerelease: true);
+            var packageViewModel = _listPackageItemViewModelFactory.Create(package, currentUser);
+
+            return new OwnerRequestsListItemViewModel
+            {
+                Request = request,
+                Package = packageViewModel,
+                CanAccept = ActionsRequiringPermissions.HandlePackageOwnershipRequest.CheckPermissions(currentUser, request.NewOwner) == PermissionsCheckResult.Allowed,
+                CanCancel = packageViewModel.CanManageOwners,
+            };
         }
     }
 }

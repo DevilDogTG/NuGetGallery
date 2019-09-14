@@ -30,7 +30,8 @@ namespace NuGetGallery
             IPackageService packageService,
             IDeleteAccountService deleteAccountService,
             IContentObjectService contentObjectService,
-            IMessageServiceConfiguration messageServiceConfiguration)
+            IMessageServiceConfiguration messageServiceConfiguration,
+            IIconUrlProvider iconUrlProvider)
             : base(
                   authService,
                   packageService,
@@ -41,7 +42,8 @@ namespace NuGetGallery
                   certificateService,
                   contentObjectService,
                   messageServiceConfiguration,
-                  deleteAccountService)
+                  deleteAccountService,
+                  iconUrlProvider)
         {
         }
 
@@ -153,8 +155,7 @@ namespace NuGetGallery
                     account,
                     currentUser,
                     request.NewMember,
-                    request.IsAdmin,
-                    cancellationUrl: Url.CancelOrganizationMembershipRequest(memberName, relativeUrl: false));
+                    request.IsAdmin);
                 await MessageService.SendMessageAsync(organizationMembershipRequestInitiatedMessage);
 
                 return Json(new OrganizationMemberViewModel(request));
@@ -167,13 +168,31 @@ namespace NuGetGallery
 
         [HttpGet]
         [UIAuthorize]
+        public async Task<ActionResult> ConfirmMemberRequestRedirect(string accountName, string confirmationToken)
+        {
+            return await ConfirmMemberRequestAsync(accountName, confirmationToken, redirect: true);
+        }
+
+        [HttpPost]
+        [UIAuthorize]
+        [ValidateAntiForgeryToken]
         public async Task<ActionResult> ConfirmMemberRequest(string accountName, string confirmationToken)
+        {
+            return await ConfirmMemberRequestAsync(accountName, confirmationToken, redirect: false);
+        }
+
+        private async Task<ActionResult> ConfirmMemberRequestAsync(string accountName, string confirmationToken, bool redirect)
         {
             var account = GetAccount(accountName);
 
             if (account == null)
             {
                 return new HttpStatusCodeResult(HttpStatusCode.NotFound);
+            }
+
+            if (redirect)
+            {
+                return Redirect(Url.ManageMyOrganizations());
             }
 
             try
@@ -196,13 +215,31 @@ namespace NuGetGallery
 
         [HttpGet]
         [UIAuthorize]
+        public async Task<ActionResult> RejectMemberRequestRedirect(string accountName, string confirmationToken)
+        {
+            return await RejectMemberRequestAsync(accountName, confirmationToken, redirect: true);
+        }
+
+        [HttpPost]
+        [UIAuthorize]
+        [ValidateAntiForgeryToken]
         public async Task<ActionResult> RejectMemberRequest(string accountName, string confirmationToken)
+        {
+            return await RejectMemberRequestAsync(accountName, confirmationToken, redirect: false);
+        }
+
+        private async Task<ActionResult> RejectMemberRequestAsync(string accountName, string confirmationToken, bool redirect)
         {
             var account = GetAccount(accountName);
 
             if (account == null)
             {
                 return new HttpStatusCodeResult(HttpStatusCode.NotFound);
+            }
+
+            if (redirect)
+            {
+                return Redirect(Url.ManageMyOrganizations());
             }
 
             try
@@ -326,14 +363,14 @@ namespace NuGetGallery
 
         protected override string GetDeleteAccountViewName() => "DeleteOrganizationAccount";
 
-        protected override DeleteAccountViewModel<Organization> GetDeleteAccountViewModel(Organization account)
+        protected override DeleteAccountViewModel GetDeleteAccountViewModel(Organization account)
         {
             return GetDeleteOrganizationViewModel(account);
         }
 
         private DeleteOrganizationViewModel GetDeleteOrganizationViewModel(Organization account)
         {
-            return new DeleteOrganizationViewModel(account, GetCurrentUser(), PackageService);
+            return new DeleteOrganizationViewModel(account, base.GetCurrentUser(), GetOwnedPackagesViewModels(account));
         }
 
         [HttpPost]

@@ -249,7 +249,7 @@
                         </ul>
                         @if (!Model.PackageValidationIssues.Any(i => i.IssueCode == ValidationIssueCode.Unknown))
                         {
-                            var issuePluralString = Model.PackageValidationIssues.Count() > 1 ? "all the issues" : "the issue";
+                            var issuePluralString = Model.PackageValidationIssues.Count > 1 ? "all the issues" : "the issue";
                             <text>Once you've fixed @issuePluralString with your package, you can reupload it with the same ID and version.</text>
                         }
                         else
@@ -308,6 +308,15 @@
                     @<text>
                         <strong>This package has not been indexed yet.</strong> It will appear in search results
                         and will be available for install/restore after indexing is complete.
+                    </text>
+                )
+            }
+
+            @if (Model.HasEmbeddedIcon && Model.IsIndexed.HasValue && !Model.IsIndexed.Value && (Model.Available || Model.Validating))
+            {
+                @ViewHelpers.AlertWarning(
+                    @<text>
+                        The package icon will become available after this package is indexed.
                     </text>
                 )
             }
@@ -514,7 +523,7 @@
             @if(Model.IsGitHubUsageEnabled && !Model.IsDotnetToolPackageType)
             {
                 <h2>
-                    <a role="button" data-toggle="collapse" data-target="#github-usage"
+                    <a href="#" role="button" data-toggle="collapse" data-target="#github-usage"
                        aria-expanded="false" aria-controls="github-usage" id="show-github-usage">
                         <i class="ms-Icon ms-Icon--ChevronRight" aria-hidden="true"></i>
                         <span>GitHub Usage</span>
@@ -572,7 +581,7 @@
                 </a>
             </h2>
             <div class="version-history panel-collapse collapse in" aria-expanded="true" id="version-history">
-                <table class="table borderless">
+                <table aria-label="Version History of @Model.Id" class="table borderless">
                     <thead>
                         <tr>
                             <th>Version</th>
@@ -582,7 +591,8 @@
                             {
                                 <th>Status</th>
                             }
-                            <th colspan="2"></th>
+                            <th aria-label="Signature Information" abbr="Signature Information"></th>
+                            <th aria-label="Deprecation Information" abbr="Deprecation Information"></th>
                         </tr>
                     </thead>
                     <tbody class="no-border">
@@ -756,9 +766,7 @@
                         <img class="icon" aria-hidden="true" alt="GitHub logo"
                              src="@Url.Absolute("~/Content/gallery/img/github.svg")"
                              @ViewHelpers.ImageFallback(Url.Absolute("~/Content/gallery/img/github-32x32.png")) />
-                        <a href="#show-github-usage" title="View the top dependent repositories" id="dependent-repos-link">
-                            Dependent repositories
-                        </a>
+                        <a href="#show-github-usage" title="View the top dependent repositories" id="dependent-repos-link">Dependent repositories</a>
                         (@(Model.GitHubDependenciesInformation.TotalRepos.ToKiloFormat())+)
                     </li>
                 }
@@ -863,7 +871,18 @@
                 {
                     <li>
                         <i class="ms-Icon ms-Icon--Refresh" aria-hidden="true"></i>
-                        <a href="@Url.ReflowPackage(Model)">Reflow package</a>
+                        @ViewHelpers.PostLink(
+                            this,
+                            formId: "reflow-package-form",
+                            linkText: "Reflow package",
+                            actionName: "Reflow",
+                            controllerName: "Packages",
+                            role: string.Empty,
+                            formValues: new Dictionary<string, string>
+                            {
+                                { "id", Model.Id },
+                                { "version", Model.Version },
+                            })
                     </li>
                 }
 
@@ -871,14 +890,36 @@
                 {
                     <li>
                         <i class="ms-Icon ms-Icon--Refresh" aria-hidden="true"></i>
-                        <a href="@Url.RevalidatePackage(Model)">Revalidate package</a>
+                        @ViewHelpers.PostLink(
+                            this,
+                            formId: "revalidate-package-form",
+                            linkText: "Revalidate package",
+                            actionName: "Revalidate",
+                            controllerName: "Packages",
+                            role: string.Empty,
+                            formValues: new Dictionary<string, string>
+                            {
+                                { "id", Model.Id },
+                                { "version", Model.Version },
+                            })
                     </li>
 
                     if (Model.LatestSymbolsPackage != null)
                     {
                         <li>
                             <i class="ms-Icon ms-Icon--Refresh" aria-hidden="true"></i>
-                            <a href="@Url.RevalidateSymbolsPackage(Model)">Revalidate symbols</a>
+                            @ViewHelpers.PostLink(
+                                this,
+                                formId: "revalidate-symbols-form",
+                                linkText: "Revalidate symbols",
+                                actionName: "RevalidateSymbols",
+                                controllerName: "Packages",
+                                role: string.Empty,
+                                formValues: new Dictionary<string, string>
+                                {
+                                    { "id", Model.Id },
+                                    { "version", Model.Version },
+                                })
                         </li>
                     }
                 }
@@ -931,9 +972,9 @@ foreach (var owner in Model.Owners)
             <li>
                 @if (!String.IsNullOrEmpty(owner.EmailAddress))
     {
-            <a href="@Url.User(owner)" title="@owner.Username">@ViewHelpers.GravatarImage(owner.EmailAddress, owner.Username, GalleryConstants.GravatarElementSize)</a>
+            <a href="@Url.User(owner.Username)" title="@owner.Username">@ViewHelpers.GravatarImage(owner.EmailAddress, owner.Username, GalleryConstants.GravatarElementSize)</a>
 }
-                <a href="@Url.User(owner)" title="@owner.Username">
+                <a href="@Url.User(owner.Username)" title="@owner.Username">
                     @owner.Username
                 </a>
             </li>

@@ -691,6 +691,14 @@ img.reserved-indicator-icon {
   color: #a94442;
   font-weight: bold;
 }
+.page-add-organization .owner-image {
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+.page-admin-index h2 {
+  margin-bottom: 8px;
+  margin-top: 32px;
+}
 .page-api-keys .example-commands {
   background-color: #002440;
   font-family: Consolas, Menlo, Monaco, "Courier New", monospace;
@@ -1358,6 +1366,9 @@ img.reserved-indicator-icon {
 .page-manage-packages .manage-package-listing .ms-Icon {
   position: relative;
   top: 2px;
+}
+.page-manage-packages .manage-package-listing .package-controls form {
+  display: inline-block;
 }
 .page-manage-packages .inner-table {
   margin-bottom: 0px;

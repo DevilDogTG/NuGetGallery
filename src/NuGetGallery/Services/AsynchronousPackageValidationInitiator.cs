@@ -50,7 +50,7 @@ namespace NuGetGallery
             var validatingType = ValidateAndGetType(package);
 
             var entityKey = package.Key == default(int) ? (int?)null : package.Key;
-            var data = new PackageValidationMessageData(
+            var data = PackageValidationMessageData.NewProcessValidationSet(
                 package.Id,
                 package.Version,
                 Guid.NewGuid(),
@@ -58,12 +58,13 @@ namespace NuGetGallery
                 entityKey: entityKey);
 
             var activityName = $"Enqueuing asynchronous package validation: " +
-                $"{data.PackageId} {data.PackageVersion} {data.ValidatingType} ({data.ValidationTrackingId})";
+                $"{data.ProcessValidationSet.PackageId} {data.ProcessValidationSet.PackageVersion} " +
+                $"{data.ProcessValidationSet.ValidatingType} ({data.ProcessValidationSet.ValidationTrackingId})";
             using (_diagnosticsSource.Activity(activityName))
             {
                 var postponeProcessingTill = DateTimeOffset.UtcNow + _appConfiguration.AsynchronousPackageValidationDelay;
 
-                await _validationEnqueuer.StartValidationAsync(data, postponeProcessingTill);
+                await _validationEnqueuer.SendMessageAsync(data, postponeProcessingTill);
             }
 
             return TargetPackageStatus;

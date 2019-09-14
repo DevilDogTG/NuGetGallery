@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -31,25 +32,29 @@ namespace NuGetGallery
             public string EmailUpdateCancelled { get; set; }
         }
 
-        public AuthenticationService AuthenticationService { get; }
+        protected AuthenticationService AuthenticationService { get; }
 
-        public IPackageService PackageService { get; }
+        protected IPackageService PackageService { get; }
 
-        public IMessageService MessageService { get; }
+        protected IMessageService MessageService { get; }
 
-        public IUserService UserService { get; }
+        protected IUserService UserService { get; }
 
-        public ITelemetryService TelemetryService { get; }
+        protected ITelemetryService TelemetryService { get; }
 
-        public ISecurityPolicyService SecurityPolicyService { get; }
+        protected ISecurityPolicyService SecurityPolicyService { get; }
 
-        public ICertificateService CertificateService { get; }
+        protected ICertificateService CertificateService { get; }
 
-        public IContentObjectService ContentObjectService { get; }
+        protected IContentObjectService ContentObjectService { get; }
 
-        public IMessageServiceConfiguration MessageServiceConfiguration { get; }
+        protected IMessageServiceConfiguration MessageServiceConfiguration { get; }
 
-        public IDeleteAccountService DeleteAccountService { get; }
+        protected IDeleteAccountService DeleteAccountService { get; }
+
+        protected IIconUrlProvider IconUrlProvider { get; }
+
+        private readonly DeleteAccountListPackageItemViewModelFactory _deleteAccountListPackageItemViewModelFactory;
 
         public AccountsController(
             AuthenticationService authenticationService,
@@ -61,7 +66,8 @@ namespace NuGetGallery
             ICertificateService certificateService,
             IContentObjectService contentObjectService,
             IMessageServiceConfiguration messageServiceConfiguration,
-            IDeleteAccountService deleteAccountService)
+            IDeleteAccountService deleteAccountService,
+            IIconUrlProvider iconUrlProvider)
         {
             AuthenticationService = authenticationService ?? throw new ArgumentNullException(nameof(authenticationService));
             PackageService = packageService ?? throw new ArgumentNullException(nameof(packageService));
@@ -73,6 +79,9 @@ namespace NuGetGallery
             ContentObjectService = contentObjectService ?? throw new ArgumentNullException(nameof(contentObjectService));
             MessageServiceConfiguration = messageServiceConfiguration ?? throw new ArgumentNullException(nameof(messageServiceConfiguration));
             DeleteAccountService = deleteAccountService ?? throw new ArgumentNullException(nameof(deleteAccountService));
+            IconUrlProvider = iconUrlProvider ?? throw new ArgumentNullException(nameof(iconUrlProvider));
+
+            _deleteAccountListPackageItemViewModelFactory = new DeleteAccountListPackageItemViewModelFactory(PackageService, IconUrlProvider);
         }
 
         public abstract string AccountAction { get; }
@@ -364,9 +373,26 @@ namespace NuGetGallery
 
         protected abstract string GetDeleteAccountViewName();
 
-        protected abstract DeleteAccountViewModel<TUser> GetDeleteAccountViewModel(TUser account);
+        protected abstract DeleteAccountViewModel GetDeleteAccountViewModel(TUser account);
 
         public abstract Task<ActionResult> RequestAccountDeletion(string accountName = null);
+
+        protected List<DeleteAccountListPackageItemViewModel> GetOwnedPackagesViewModels(User account)
+        {
+            return PackageService
+                 .FindPackagesByAnyMatchingOwner(account, includeUnlisted: true)
+                 .Select(p => CreateDeleteAccountListPackageItemViewModel(p, account, GetCurrentUser()))
+                 .ToList();
+        }
+
+        private DeleteAccountListPackageItemViewModel CreateDeleteAccountListPackageItemViewModel(
+            Package package,
+            User userToDelete,
+            User currentUser)
+        {
+            return _deleteAccountListPackageItemViewModelFactory.Create(package, userToDelete, currentUser);
+        }
+
 
         protected virtual TUser GetAccount(string accountName)
         {

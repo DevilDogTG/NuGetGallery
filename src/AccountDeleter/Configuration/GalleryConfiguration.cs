@@ -63,6 +63,7 @@ namespace NuGetGallery.AccountDeleter
         public bool CollectPerfLogs { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
         public bool AutoUpdateSearchIndex { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
         public string EnforcedAuthProviderForAdmin { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public string EnforcedTenantIdForAdmin { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
         public string UserPasswordRegex { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
         public string UserPasswordHint { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
         public int ExpirationInDaysForApiKeyV1 { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
@@ -103,5 +104,8 @@ namespace NuGetGallery.AccountDeleter
         public MailAddress GalleryOwner { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
         public MailAddress GalleryNoReplyAddress { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
         public string SqlReadOnlyReplicaConnectionString { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public bool AsynchronousDeleteAccountServiceEnabled { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public string EmbeddedIconUrlTemplate { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public bool SelfServiceAccountDeleteEnabled { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
     }
 }

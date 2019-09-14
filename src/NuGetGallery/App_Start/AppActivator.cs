@@ -39,6 +39,8 @@ namespace NuGetGallery
 
         public static void PreStart()
         {
+            Trace.AutoFlush = true;
+
             MessageQueue.Enable(maxPerQueue: 1000);
 
             AntiForgeryConfig.UniqueClaimTypeIdentifier = ClaimTypes.NameIdentifier;
@@ -252,6 +254,7 @@ namespace NuGetGallery
             GlobalFilters.Filters.Add(new SendErrorsToTelemetryAttribute { View = "~/Views/Errors/InternalError.cshtml" });
             GlobalFilters.Filters.Add(new ReadOnlyModeErrorFilter());
             GlobalFilters.Filters.Add(new AntiForgeryErrorFilter());
+            GlobalFilters.Filters.Add(new UserDeletedErrorFilter());
             ValueProviderFactories.Factories.Add(new HttpHeaderValueProviderFactory());
         }
 

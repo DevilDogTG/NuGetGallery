@@ -1,6 +1,7 @@
-﻿﻿// Copyright (c) .NET Foundation. All rights reserved.
+﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using Moq;
 using NuGet.Services.Entities;
 using NuGet.Services.Licenses;
 using System.Collections.Generic;
@@ -8,7 +9,7 @@ using Xunit;
 
 namespace NuGetGallery.ViewModels
 {
-    public class DisplayLicenseViewModelFacts
+    public class DisplayLicenseViewModelFactoryFacts
     {
         [Theory]
         [InlineData(EmbeddedLicenseFileType.Absent, "some expression")]
@@ -21,12 +22,13 @@ namespace NuGetGallery.ViewModels
             var package = new Package
             {
                 Version = "1.0.0",
+                PackageRegistration = new PackageRegistration { Id = "SomeId" },
                 EmbeddedLicenseType = embeddedLicenseType,
                 LicenseExpression = licenseExpression,
             };
 
             // act
-            var model = new DisplayLicenseViewModel(package, licenseExpressionSegments: null, licenseFileContents: null);
+            var model = CreateDisplayLicenseViewModel(package, licenseExpressionSegments: null, licenseFileContents: null);
 
             // assert
             Assert.Equal(embeddedLicenseType, model.EmbeddedLicenseType);
@@ -42,11 +44,12 @@ namespace NuGetGallery.ViewModels
             {
                 LicenseUrl = licenseUrl,
                 Version = "1.0.0",
+                PackageRegistration = new PackageRegistration { Id = "SomeId" },
                 LicenseNames = "l1,l2, l3 ,l4  ,  l5 ",
             };
 
             // act
-            var model = new DisplayLicenseViewModel(package, licenseExpressionSegments: null, licenseFileContents: null);
+            var model = CreateDisplayLicenseViewModel(package, licenseExpressionSegments: null, licenseFileContents: null);
 
             // assert
             Assert.Equal(new string[] { "l1", "l2", "l3", "l4", "l5" }, model.LicenseNames);
@@ -69,11 +72,12 @@ namespace NuGetGallery.ViewModels
             var package = new Package
             {
                 Version = "1.0.0",
+                PackageRegistration = new PackageRegistration { Id = "SomeId" },
                 LicenseUrl = licenseUrl
             };
 
             // act
-            var model = new DisplayLicenseViewModel(package, licenseExpressionSegments: null, licenseFileContents: null);
+            var model = CreateDisplayLicenseViewModel(package, licenseExpressionSegments: null, licenseFileContents: null);
 
             // assert
             Assert.Equal(expected, model.LicenseUrl);
@@ -86,11 +90,12 @@ namespace NuGetGallery.ViewModels
             var package = new Package
             {
                 Version = "1.0.0",
+                PackageRegistration = new PackageRegistration { Id = "SomeId" },
             };
             var segments = new List<CompositeLicenseExpressionSegment>();
 
             // act
-            var model = new DisplayLicenseViewModel(package, licenseExpressionSegments: segments, licenseFileContents: null);
+            var model = CreateDisplayLicenseViewModel(package, licenseExpressionSegments: segments, licenseFileContents: null);
 
             // assert
             Assert.Equal(segments, model.LicenseExpressionSegments);
@@ -103,14 +108,26 @@ namespace NuGetGallery.ViewModels
             var package = new Package
             {
                 Version = "1.0.0",
+                PackageRegistration = new PackageRegistration { Id = "SomeId" },
             };
             var licenseFileContents = "It's a license";
 
             // act
-            var model = new DisplayLicenseViewModel(package, licenseExpressionSegments: null, licenseFileContents: licenseFileContents);
+            var model = CreateDisplayLicenseViewModel(package, licenseExpressionSegments: null, licenseFileContents: licenseFileContents);
 
             // assert
             Assert.Equal(licenseFileContents, model.LicenseFileContents);
+        }
+
+        private static DisplayLicenseViewModel CreateDisplayLicenseViewModel(
+            Package package,
+            IReadOnlyCollection<CompositeLicenseExpressionSegment> licenseExpressionSegments = null,
+            string licenseFileContents = null)
+        {
+            return new DisplayLicenseViewModelFactory(Mock.Of<IIconUrlProvider>()).Create(
+                package,
+                licenseExpressionSegments,
+                licenseFileContents);
         }
     }
 }

@@ -1708,6 +1708,45 @@ namespace NuGetGallery
 
             private const string TransformedUsername = "Account";
             private const string AdminUsername = "Admin";
+            private const string Token = "token";
+
+            [Fact]
+            public async Task WhenThereIsNoMigrationRequest_Fails()
+            {
+                Assert.False(await InvokeTransformUserToOrganization(
+                    3,
+                    migrationRequest: null,
+                    admin: new User(AdminUsername) { Credentials = new Credential[0] }));
+            }
+
+            [Fact]
+            public async Task WhenAdminUserDoesNotMatch_Fails()
+            {
+                Assert.False(await InvokeTransformUserToOrganization(
+                    3,
+                    new OrganizationMigrationRequest
+                    {
+                        AdminUser = new User(AdminUsername) { Key = 1, Credentials = new Credential[0] },
+                        ConfirmationToken = Token,
+                        RequestDate = DateTime.UtcNow
+                    },
+                    admin: new User("OtherAdmin") { Key = 2, Credentials = new Credential[0] }));
+            }
+
+            [Fact]
+            public async Task WhenTokenDoesNotMatch_Fails()
+            {
+                var admin = new User(AdminUsername) { Credentials = new Credential[0] };
+                Assert.False(await InvokeTransformUserToOrganization(
+                    3,
+                    new OrganizationMigrationRequest
+                    {
+                        AdminUser = admin,
+                        ConfirmationToken = "othertoken",
+                        RequestDate = DateTime.UtcNow
+                    },
+                    admin));
+            }
 
             [Fact]
             public async Task WhenAdminHasNoTenant_TransformsAccountWithoutPolicy()
@@ -1722,6 +1761,7 @@ namespace NuGetGallery
                     ar.AffectedMemberIsAdmin == true));
             }
 
+            [Fact]
             public async Task WhenAdminHasUnsupportedTenant_TransformsAccountWithoutPolicy()
             {
                 var mockLoginDiscontinuationConfiguration = new Mock<ILoginDiscontinuationConfiguration>();
@@ -1742,6 +1782,7 @@ namespace NuGetGallery
                     ar.AffectedMemberIsAdmin == true));
             }
 
+            [Fact]
             public async Task WhenAdminHasSupportedTenant_TransformsAccountWithPolicy()
             {
                 var mockLoginDiscontinuationConfiguration = new Mock<ILoginDiscontinuationConfiguration>();
@@ -1804,10 +1845,11 @@ namespace NuGetGallery
                     ar.AffectedMemberIsAdmin == true));
             }
 
-            private Task<bool> InvokeTransformUserToOrganization(int affectedRecords, User admin = null, bool subscribesToPolicy = false)
+            private Task<bool> InvokeTransformUserToOrganization(
+                int affectedRecords,
+                User admin = null,
+                bool subscribesToPolicy = false)
             {
-                // Arrange
-                var account = new User(TransformedUsername);
                 admin = admin ?? new User(AdminUsername)
                 {
                     Credentials = new Credential[] {
@@ -1819,6 +1861,26 @@ namespace NuGetGallery
                     }
                 };
 
+                var migrationRequest = new OrganizationMigrationRequest
+                {
+                    AdminUser = admin,
+                    ConfirmationToken = Token,
+                    RequestDate = DateTime.UtcNow,
+                };
+
+                return InvokeTransformUserToOrganization(affectedRecords, migrationRequest, admin, subscribesToPolicy);
+            }
+
+            private Task<bool> InvokeTransformUserToOrganization(
+                int affectedRecords,
+                OrganizationMigrationRequest migrationRequest,
+                User admin,
+                bool subscribesToPolicy = false)
+            {
+                // Arrange
+                var account = new User(TransformedUsername);
+                account.OrganizationMigrationRequest = migrationRequest;
+
                 _service.MockDatabase
                     .Setup(db => db.ExecuteSqlResourceAsync(It.IsAny<string>(), It.IsAny<object[]>()))
                     .Returns(Task.FromResult(affectedRecords));
@@ -1828,7 +1890,7 @@ namespace NuGetGallery
 
                 _service.MockSecurityPolicyService
                     .Verify(
-                        sp => sp.SubscribeAsync(It.IsAny<User>(), It.IsAny<IUserSecurityPolicySubscription>(), true), 
+                        sp => sp.SubscribeAsync(It.IsAny<User>(), It.IsAny<IUserSecurityPolicySubscription>(), true),
                         subscribesToPolicy ? Times.Once() : Times.Never());
 
                 return result;
@@ -2121,6 +2183,105 @@ namespace NuGetGallery
                 Assert.Null(accountToTransform.OrganizationMigrationRequest);
 
                 service.MockUserRepository.Verify(x => x.CommitChangesAsync(), Times.Once);
+            }
+        }
+
+        public class TheGetSiteAdminsMethod
+        {
+            [Fact]
+            public void ReturnsExpectedUsers()
+            {
+                var adminRole = new Role { Key = 0, Name = Constants.AdminRoleName };
+
+                var notAdminUser = new User { Username = "notAdminUser", Key = 1, EmailAddress = "notAdminUser@example.org" };
+                var notAdminDeletedUser = new User { Username = "notAdminDeletedUser", Key = 1, EmailAddress = "notAdminDeletedUser@example.org" };
+
+                var adminUser = new User { Username = "adminUser", Key = 1, EmailAddress = "adminUser@example.org" };
+                adminRole.Users.Add(adminUser);
+                adminUser.Roles.Add(adminRole);
+                var adminDeletedUser = new User { Username = "adminDeletedUser", Key = 1, EmailAddress = "adminDeletedUser@example.org" };
+                adminRole.Users.Add(adminDeletedUser);
+                adminDeletedUser.Roles.Add(adminRole);
+
+                var service = new TestableUserServiceWithDBFaking
+                {
+                    Users = new[] { notAdminUser, notAdminDeletedUser, adminUser, adminDeletedUser },
+                    Roles = new[] { adminRole }
+                };
+
+                var result = service.GetSiteAdmins();
+                Assert.Equal(1, result.Count);
+                Assert.Equal(adminUser, result.Single());
+            }
+        }
+
+        public class TheSetIsAdministratorMethod
+        {
+            [Theory]
+            [InlineData(false)]
+            [InlineData(true)]
+            public Task ThrowsArgumentNullExceptionIfUserNull(bool isAdmin)
+            {
+                var service = new TestableUserService();
+                return Assert.ThrowsAsync<ArgumentNullException>(() => service.SetIsAdministrator(null, isAdmin));
+            }
+
+            [Theory]
+            [InlineData(false)]
+            [InlineData(true)]
+            public Task ThrowsInvalidOperationExceptionIfRoleNull(bool isAdmin)
+            {
+                var user = new User();
+                var service = new TestableUserService();
+                return Assert.ThrowsAsync<InvalidOperationException>(() => service.SetIsAdministrator(user, isAdmin));
+            }
+
+            [Fact]
+            public async Task AddsAdminCorrectly()
+            {
+                // Arrange
+                var adminRole = new Role { Key = 0, Name = Constants.AdminRoleName };
+                var user = new User { Username = "user", Key = 1, EmailAddress = "user@example.org" };
+
+                var service = new TestableUserServiceWithDBFaking
+                {
+                    Users = new[] { user },
+                    Roles = new[] { adminRole }
+                };
+
+                // Act
+                await service.SetIsAdministrator(user, true);
+
+                // Assert
+                service.FakeEntitiesContext.VerifyCommitChanges();
+
+                Assert.Contains(user, adminRole.Users);
+                Assert.Contains(adminRole, user.Roles);
+            }
+
+            [Fact]
+            public async Task RemovesAdminCorrectly()
+            {
+                // Arrange
+                var adminRole = new Role { Key = 0, Name = Constants.AdminRoleName };
+                var user = new User { Username = "user", Key = 1, EmailAddress = "user@example.org" };
+                adminRole.Users.Add(user);
+                user.Roles.Add(adminRole);
+
+                var service = new TestableUserServiceWithDBFaking
+                {
+                    Users = new[] { user },
+                    Roles = new[] { adminRole }
+                };
+
+                // Act
+                await service.SetIsAdministrator(user, false);
+
+                // Assert
+                service.FakeEntitiesContext.VerifyCommitChanges();
+
+                Assert.DoesNotContain(user, adminRole.Users);
+                Assert.DoesNotContain(adminRole, user.Roles);
             }
         }
     }

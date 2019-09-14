@@ -4,9 +4,9 @@
     ViewBag.Tab = "Admin";
 }
 
-<section role="main" class="container main-container">
+<section role="main" class="container main-container page-admin-index">
     <h1>Site Administration</h1>
-    <ul>
+    <ul class="list-unstyled">
         @if (Model.ShowDatabaseAdmin)
         {
             <li>
@@ -78,10 +78,17 @@
         </li>
         <li>
             <h2>
-                <a href="@Url.Action(actionName: "ClearContentCache", controllerName: "Home")">
-                    <i class="ms-Icon ms-Icon--Refresh"></i>
-                    <span>Clear Content Cache</span>
-                </a>
+                @ViewHelpers.PostLink(
+                    this,
+                    formId: "clear-content-cache-form",
+                    htmlContent: @<text>
+                        <i class="ms-Icon ms-Icon--Refresh"></i>
+                        <span>Clear Content Cache</span>
+                    </text>,
+                    actionName: "ClearContentCache",
+                    controllerName: "Home",
+                    role: string.Empty,
+                    area: "Admin")
             </h2>
             <p>
                 Clear Content Cache
@@ -147,13 +154,24 @@
         </li>
         <li>
             <h2>
-                <a href="@Url.Action(actionName: "Index", controllerName: "Features")">
+                <a href="@Url.Action(actionName: "Index", controllerName: "Features" )">
                     <i class="ms-Icon ms-Icon--Flag"></i>
                     <span>Feature Flags</span>
                 </a>
             </h2>
             <p>
                 Manage which features are enabled
+            </p>
+        </li>
+        <li>
+            <h2>
+                <a href="@Url.Action(actionName: "Index", controllerName: "SiteAdmins")">
+                    <i class="ms-Icon ms-Icon--Admin"></i>
+                    <span>Site Admins</span>
+                </a>
+            </h2>
+            <p>
+                Manage site admins
             </p>
         </li>
     </ul>

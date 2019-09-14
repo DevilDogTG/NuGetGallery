@@ -10,7 +10,7 @@ param (
     [string]$PackageSuffix,
     [string]$Branch,
     [string]$CommitSHA,
-    [string]$BuildBranch = '2d8feecabe3aeaed7f5b4d50b9be78c94faf39ec'
+    [string]$BuildBranch = '1f60ff35a3cebf1a0c5fb631d2534fd5b4a11edc'
 )
 
 Set-StrictMode -Version 1.0
@@ -84,6 +84,7 @@ Invoke-BuildStep 'Set version metadata in AssemblyInfo.cs' {
         (Join-Path $PSScriptRoot "src\NuGet.Services.DatabaseMigration\Properties\AssemblyInfo.g.cs"), `
         (Join-Path $PSScriptRoot "src\DatabaseMigrationTools\Properties\AssemblyInfo.g.cs"), `
         (Join-Path $PSScriptRoot "src\AccountDeleter\Properties\AssemblyInfo.g.cs")
+        (Join-Path $PSScriptRoot "src\GalleryTools\Properties\AssemblyInfo.g.cs")
 
     Foreach ($Path in $Paths) {
         Set-VersionInfo -Path $Path -Version $SimpleVersion -Branch $Branch -Commit $CommitSHA
@@ -105,6 +106,7 @@ Invoke-BuildStep 'Creating artifacts' { `
     New-Package (Join-Path $PSScriptRoot "src\DatabaseMigrationTools\DatabaseMigration.SupportRequest.nuspec") -Configuration $Configuration -BuildNumber $BuildNumber -Version $SemanticVersion -Branch $Branch -MSBuildVersion "15"
     New-Package (Join-Path $PSScriptRoot "src\DatabaseMigrationTools\DatabaseMigration.Validation.nuspec") -Configuration $Configuration -BuildNumber $BuildNumber -Version $SemanticVersion -Branch $Branch -MSBuildVersion "15"
     New-Package (Join-Path $PSScriptRoot "src\AccountDeleter\Gallery.AccountDeleter.nuspec") -Configuration $Configuration -BuildNumber $BuildNumber -Version $SemanticVersion -Branch $Branch -MSBuildVersion "15"
+    New-Package (Join-Path $PSScriptRoot "src\GalleryTools\Gallery.GalleryTools.nuspec") -Configuration $Configuration -BuildNumber $BuildNumber -Version $SemanticVersion -Branch $Branch -MSBuildVersion "15"
 } `
 -ev +BuildErrors
 

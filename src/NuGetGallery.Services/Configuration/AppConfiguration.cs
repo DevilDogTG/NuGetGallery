@@ -78,6 +78,8 @@ namespace NuGetGallery.Configuration
 
         public bool BlockingAsynchronousPackageValidationEnabled { get; set; }
 
+        public bool SelfServiceAccountDeleteEnabled { get; set; }
+
         public TimeSpan AsynchronousPackageValidationDelay { get; set; }
 
         public TimeSpan ValidationExpectedTime { get; set; }
@@ -230,6 +232,13 @@ namespace NuGetGallery.Configuration
         public string EnforcedAuthProviderForAdmin { get; set; }
 
         /// <summary>
+        /// Gets a string indicating which AAD Tenant Id should be used for administrators. 
+        /// When specified, the gallery will ensure admin users are logging in using only the specified tenant ID.
+        /// Blank means any AAD tenant ID can be used by administrators.
+        /// </summary>
+        public string EnforcedTenantIdForAdmin { get; set; }
+
+        /// <summary>
         /// A regex to validate password format. The default regex requires the password to be atlease 8 characters, 
         /// include at least one uppercase letter, one lowercase letter and a digit.
         /// </summary>
@@ -353,6 +362,8 @@ namespace NuGetGallery.Configuration
 
         public bool AsynchronousEmailServiceEnabled { get; set; }
 
+        public bool AsynchronousDeleteAccountServiceEnabled { get; set; }
+
         [DefaultValue(false)]
         public bool BlockLegacyLicenseUrl { get; set; }
 
@@ -388,5 +399,8 @@ namespace NuGetGallery.Configuration
         /// </summary>
         [DefaultValue(100000)]
         public int SearchHttpRequestTimeoutInMilliseconds { get; set; }
+
+        [DefaultValue("")]
+        public string EmbeddedIconUrlTemplate { get; set; }
     }
 }

@@ -19,6 +19,7 @@ using NuGetGallery.Areas.Admin;
 using NuGetGallery.Areas.Admin.Models;
 using NuGetGallery.Areas.Admin.ViewModels;
 using NuGetGallery.Authentication;
+using NuGetGallery.Configuration;
 using NuGetGallery.Framework;
 using NuGetGallery.Infrastructure.Authentication;
 using NuGetGallery.Infrastructure.Mail.Messages;
@@ -516,23 +517,12 @@ namespace NuGetGallery
         public class TheApiKeysAction
             : TestContainer
         {
-            public static IEnumerable<object[]> CurrentUserIsInPackageOwnersWithPushNew_Data
-            {
-                get
-                {
-                    foreach (var currentUser in
-                        new[]
-                        {
-                            TestUtility.FakeUser,
-                            TestUtility.FakeAdminUser,
-                            TestUtility.FakeOrganizationAdmin,
-                            TestUtility.FakeOrganizationCollaborator
-                        })
-                    {
-                        yield return MemberDataHelper.AsData(currentUser);
-                    }
-                }
-            }
+            public static IEnumerable<object[]> CurrentUserIsInPackageOwnersWithPushNew_Data =
+                MemberDataHelper.AsDataSet(
+                    TestUtility.FakeUser,
+                    TestUtility.FakeAdminUser,
+                    TestUtility.FakeOrganizationAdmin,
+                    TestUtility.FakeOrganizationCollaborator);
 
             [Theory]
             [MemberData(nameof(CurrentUserIsInPackageOwnersWithPushNew_Data))]
@@ -547,9 +537,11 @@ namespace NuGetGallery
                 Assert.True(firstPackageOwner.CanUnlist);
             }
 
+            public static IEnumerable<object[]> OrganizationIsInPackageOwnersIfMember_Data =
+                MemberDataHelper.BooleanDataSet();
+
             [Theory]
-            [InlineData(true)]
-            [InlineData(false)]
+            [MemberData(nameof(OrganizationIsInPackageOwnersIfMember_Data))]
             public void OrganizationIsInPackageOwnersIfMember(bool isAdmin)
             {
                 var currentUser = isAdmin ? TestUtility.FakeOrganizationAdmin : TestUtility.FakeOrganizationCollaborator;
@@ -563,21 +555,10 @@ namespace NuGetGallery
                 Assert.True(owner.CanUnlist);
             }
 
-            public static IEnumerable<object[]> OrganizationIsNotInPackageOwnersIfNotMember_Data
-            {
-                get
-                {
-                    foreach (var currentUser in
-                        new[]
-                        {
-                            TestUtility.FakeUser,
-                            TestUtility.FakeAdminUser
-                        })
-                    {
-                        yield return MemberDataHelper.AsData(currentUser);
-                    }
-                }
-            }
+            public static IEnumerable<object[]> OrganizationIsNotInPackageOwnersIfNotMember_Data =
+                MemberDataHelper.AsDataSet(
+                    TestUtility.FakeUser,
+                    TestUtility.FakeAdminUser);
 
             [Theory]
             [MemberData(nameof(OrganizationIsNotInPackageOwnersIfNotMember_Data))]
@@ -1180,6 +1161,46 @@ namespace NuGetGallery
                 // Assert
                 var model = ResultAssert.IsView<UserProfileModel>(result);
                 AssertUserProfileModel(model, currentUser, owner, package2, package1);
+            }
+
+            [Theory]
+            [MemberData(nameof(PossibleOwnershipScenarios_Data))]
+            public void UsesProperIconUrl(User currentUser, User owner)
+            {
+                string username = "test";
+
+                var packageRegistration = new PackageRegistration();
+                packageRegistration.Owners.Add(owner);
+
+                var userPackage = new Package()
+                {
+                    Description = "TestPackage",
+                    Key = 1,
+                    Version = "1.0.0",
+                    PackageRegistration = packageRegistration,
+                };
+                packageRegistration.Packages.Add(userPackage);
+
+                var userPackages = new List<Package>() { userPackage };
+
+                const string iconUrl = "https://some.test/icon";
+                GetMock<IIconUrlProvider>()
+                    .Setup(iup => iup.GetIconUrlString(It.IsAny<Package>()))
+                    .Returns(iconUrl);
+                GetMock<IUserService>()
+                    .Setup(x => x.FindByUsername(username, false))
+                    .Returns(owner);
+                GetMock<IPackageService>()
+                    .Setup(x => x.FindPackagesByOwner(owner, false, false))
+                    .Returns(new[] { userPackage });
+
+                var controller = GetController<UsersController>();
+                controller.SetCurrentUser(currentUser);
+                var model = ResultAssert.IsView<UserProfileModel>(controller.Profiles(username));
+
+                GetMock<IIconUrlProvider>()
+                    .Verify(iup => iup.GetIconUrlString(userPackage), Times.AtLeastOnce);
+                Assert.Equal(iconUrl, model.AllPackages.Single().IconUrl);
             }
 
             private void AssertUserProfileModel(UserProfileModel model, User currentUser, User owner, params Package[] orderedPackages)
@@ -1862,7 +1883,7 @@ namespace NuGetGallery
                         },
                         new object[]
                         {
-                            TestCredentialHelper.CreateExternalCredential("abc")
+                            TestCredentialHelper.CreateExternalMSACredential("abc")
                         },
                         new object[]
                         {
@@ -2012,7 +2033,7 @@ namespace NuGetGallery
                         },
                         new object[]
                         {
-                            TestCredentialHelper.CreateExternalCredential("abc")
+                            TestCredentialHelper.CreateExternalMSACredential("abc")
                         },
                         new object[]
                         {
@@ -2256,6 +2277,10 @@ namespace NuGetGallery
                 GetMock<ISupportRequestService>()
                    .Setup(stub => stub.GetIssues(null, null, null, null))
                    .Returns(issues);
+                const string iconUrl = "https://icon.test/url";
+                GetMock<IIconUrlProvider>()
+                    .Setup(iup => iup.GetIconUrlString(It.IsAny<Package>()))
+                    .Returns(iconUrl);
 
                 // act
                 var result = controller.DeleteRequest() as ViewResult;
@@ -2263,7 +2288,9 @@ namespace NuGetGallery
 
                 // Assert
                 Assert.Equal(testUser.Username, model.AccountName);
-                Assert.Single(model.Packages);
+                var package = Assert.Single(model.Packages);
+                GetMock<IIconUrlProvider>()
+                    .Verify(iup => iup.GetIconUrlString(It.IsAny<Package>()), Times.AtLeastOnce);
                 Assert.Equal(isPackageOrphaned, model.HasPackagesThatWillBeOrphaned);
                 Assert.Equal(withPendingIssues, model.HasPendingRequests);
             }
@@ -2380,6 +2407,46 @@ namespace NuGetGallery
                         Description = "Delete user",
                         Success = true
                     }));
+
+                // act
+                var result = await controller.RequestAccountDeletion() as NuGetGallery.SafeRedirectResult;
+
+                // Assert
+                Assert.NotNull(result);
+            }
+
+            [Fact]
+            public async Task WhenSelfServiceAllowedDeletesAccount()
+            {
+                // Arrange
+                string userName = "DeletedUser";
+
+                var controller = GetController<UsersController>();
+
+                var fakes = Get<Fakes>();
+                var testUser = fakes.CreateUser(userName);
+                controller.SetCurrentUser(testUser);
+
+                GetMock<IUserService>()
+                    .Setup(stub => stub.FindByUsername(userName, false))
+                    .Returns(testUser);
+
+                GetMock<IDeleteAccountService>()
+                    .Setup(stub => stub.DeleteAccountAsync(testUser, It.IsAny<User>(), It.IsAny<AccountDeletionOrphanPackagePolicy>()))
+                    .Returns(value: Task.FromResult(new DeleteAccountStatus()
+                    {
+                        AccountName = userName,
+                        Description = "Delete user",
+                        Success = true
+                    }));
+
+                GetMock<IAppConfiguration>()
+                    .Setup(stub => stub.SelfServiceAccountDeleteEnabled)
+                    .Returns(true);
+
+                GetMock<IFeatureFlagService>()
+                    .Setup(stub => stub.IsSelfServiceAccountDeleteEnabled())
+                    .Returns(true);
 
                 // act
                 var result = await controller.RequestAccountDeletion() as NuGetGallery.SafeRedirectResult;
@@ -2614,18 +2681,93 @@ namespace NuGetGallery
             }
         }
 
+        public class TheConfirmTransformToOrganizationRedirectAction : TestContainer
+        {
+            [Fact]
+            public async Task RedirectsAndDoesNotPerformWriteOperation()
+            {
+                // Arrange
+                var accountToTransform = "account";
+                var controller = CreateController(accountToTransform);
+
+                // Act
+                var result = await controller.ConfirmTransformToOrganizationRedirect(accountToTransform, "token");
+
+                // Assert
+                ResultAssert.IsRedirectTo(result, "/account/Organizations");
+
+                GetMock<IMessageService>()
+                    .Verify(m =>
+                        m.SendMessageAsync(
+                            It.IsAny<OrganizationTransformAcceptedMessage>(),
+                            It.IsAny<bool>(),
+                            It.IsAny<bool>()),
+                        Times.Never());
+
+                GetMock<ITelemetryService>()
+                    .Verify(
+                        t => t.TrackOrganizationTransformCompleted(It.IsAny<Organization>()),
+                        Times.Never());
+            }
+
+            private UsersController CreateController(string accountToTransform, string canTransformErrorReason = "", bool success = true)
+            {
+                // Arrange
+                var configurationService = GetConfigurationService();
+
+                var controller = GetController<UsersController>();
+                var currentUser = new User("OrgAdmin")
+                {
+                    EmailAddress = "orgadmin@example.com"
+                };
+                controller.SetCurrentUser(currentUser);
+
+                GetMock<IUserService>()
+                    .Setup(u => u.FindByUsername(accountToTransform, false))
+                    .Returns(new User(accountToTransform)
+                    {
+                        EmailAddress = $"{accountToTransform}@example.com",
+                        OrganizationMigrationRequest = new OrganizationMigrationRequest
+                        {
+                            ConfirmationToken = "token",
+                            AdminUser = new User
+                            {
+                                Username = "OrgAdmin",
+                            },
+                        },
+                    });
+
+                GetMock<IUserService>()
+                    .Setup(u => u.CanTransformUserToOrganization(It.IsAny<User>(), out canTransformErrorReason))
+                    .Returns(string.IsNullOrEmpty(canTransformErrorReason));
+
+                GetMock<IUserService>()
+                    .Setup(u => u.CanTransformUserToOrganization(It.IsAny<User>(), It.IsAny<User>(), out canTransformErrorReason))
+                    .Returns(string.IsNullOrEmpty(canTransformErrorReason));
+
+                GetMock<IUserService>()
+                    .Setup(s => s.TransformUserToOrganization(It.IsAny<User>(), It.IsAny<User>(), It.IsAny<string>()))
+                    .Returns(Task.FromResult(success));
+
+                return controller;
+            }
+        }
+
         public class TheConfirmTransformToOrganizationAction : TestContainer
         {
+            private const string AdminUsername = "OrgAdmin";
+            private const string Token = "token";
+
             [Fact]
             public async Task WhenAccountToTransformIsNotFound_ShowsError()
             {
                 // Arrange
                 var controller = GetController<UsersController>();
-                var currentUser = new User("OrgAdmin") { EmailAddress = "orgadmin@example.com" };
+                var currentUser = new User(AdminUsername) { EmailAddress = "orgadmin@example.com" };
                 controller.SetCurrentUser(currentUser);
 
                 // Act
-                var result = await controller.ConfirmTransformToOrganization("account", "token") as ViewResult;
+                var result = await controller.ConfirmTransformToOrganization("account", Token) as ViewResult;
 
                 // Assert
                 Assert.NotNull(result);
@@ -2650,6 +2792,38 @@ namespace NuGetGallery
             }
 
             [Fact]
+            public async Task WhenCurrentUserDoesNotMatchAdmin_ReturnsError()
+            {
+                // Arrange
+                var accountToTransform = "account";
+                var controller = CreateController(accountToTransform, adminKey: 99);
+
+                // Act
+                var result = await controller.ConfirmTransformToOrganization("account", Token) as ViewResult;
+
+                // Assert
+                Assert.NotNull(result);
+
+                var model = result.Model as TransformAccountFailedViewModel;
+                Assert.Equal(
+                    String.Format(CultureInfo.CurrentCulture, Strings.TransformAccount_SignInToConfirm, AdminUsername, accountToTransform),
+                    model.ErrorMessage);
+
+                GetMock<IMessageService>()
+                    .Verify(m =>
+                        m.SendMessageAsync(
+                            It.IsAny<OrganizationTransformAcceptedMessage>(),
+                            It.IsAny<bool>(),
+                            It.IsAny<bool>()),
+                        Times.Never());
+
+                GetMock<ITelemetryService>()
+                    .Verify(
+                        t => t.TrackOrganizationTransformCompleted(It.IsAny<Organization>()),
+                        Times.Never());
+            }
+
+            [Fact]
             public async Task WhenCanTransformReturnsFalse_ShowsError()
             {
                 // Arrange
@@ -2657,7 +2831,7 @@ namespace NuGetGallery
                 var controller = CreateController(accountToTransform, canTransformErrorReason: "error");
 
                 // Act
-                var result = await controller.ConfirmTransformToOrganization(accountToTransform, "token") as ViewResult;
+                var result = await controller.ConfirmTransformToOrganization(accountToTransform, Token) as ViewResult;
 
                 // Assert
                 Assert.NotNull(result);
@@ -2689,7 +2863,7 @@ namespace NuGetGallery
                 var controller = CreateController(accountToTransform, success: false);
 
                 // Act
-                var result = await controller.ConfirmTransformToOrganization(accountToTransform, "token") as ViewResult;
+                var result = await controller.ConfirmTransformToOrganization(accountToTransform, Token) as ViewResult;
 
                 // Assert
                 Assert.NotNull(result);
@@ -2722,7 +2896,7 @@ namespace NuGetGallery
                 var controller = CreateController(accountToTransform, success: true);
 
                 // Act
-                var result = await controller.ConfirmTransformToOrganization(accountToTransform, "token");
+                var result = await controller.ConfirmTransformToOrganization(accountToTransform, Token);
 
                 // Assert
                 Assert.NotNull(result);
@@ -2740,21 +2914,46 @@ namespace NuGetGallery
                         t => t.TrackOrganizationTransformCompleted(It.IsAny<User>()));
             }
 
-            private UsersController CreateController(string accountToTransform, string canTransformErrorReason = "", bool success = true)
+            private UsersController CreateController(
+                string accountToTransform,
+                string canTransformErrorReason = "",
+                bool success = true,
+                int adminKey = 0)
+            {
+                return CreateController(
+                    new User(accountToTransform)
+                    {
+                        EmailAddress = $"{accountToTransform}@example.com",
+                        OrganizationMigrationRequest = new OrganizationMigrationRequest
+                        {
+                            ConfirmationToken = Token,
+                            AdminUser = new User
+                            {
+                                Key = adminKey,
+                                Username = AdminUsername,
+                            },
+                        },
+                    },
+                    canTransformErrorReason,
+                    success);
+            }
+
+            private UsersController CreateController(User accountToTransform, string canTransformErrorReason = "", bool success = true)
             {
                 // Arrange
                 var configurationService = GetConfigurationService();
 
                 var controller = GetController<UsersController>();
-                var currentUser = new User("OrgAdmin") { EmailAddress = "orgadmin@example.com" };
+                var currentUser = new User(AdminUsername)
+                {
+                    Key = 0,
+                    EmailAddress = "orgadmin@example.com"
+                };
                 controller.SetCurrentUser(currentUser);
 
                 GetMock<IUserService>()
-                    .Setup(u => u.FindByUsername(accountToTransform, false))
-                    .Returns(new User(accountToTransform)
-                    {
-                        EmailAddress = $"{accountToTransform}@example.com"
-                    });
+                    .Setup(u => u.FindByUsername(accountToTransform.Username, false))
+                    .Returns(accountToTransform);
 
                 GetMock<IUserService>()
                     .Setup(u => u.CanTransformUserToOrganization(It.IsAny<User>(), out canTransformErrorReason))
@@ -2771,6 +2970,58 @@ namespace NuGetGallery
                 return controller;
             }
         }
+
+        public class TheRejectTransformToOrganizationRedirectAction : TestContainer
+        {
+            [Fact]
+            public async Task RedirectsAndDoesNotPerformWriteOperation()
+            {
+                // Arrange
+                var accountToTransform = "account";
+                var controller = CreateController(accountToTransform);
+
+                // Act
+                var result = await controller.RejectTransformToOrganizationRedirect(accountToTransform, "token");
+
+                // Assert
+                ResultAssert.IsRedirectTo(result, "/account/Organizations");
+
+                GetMock<IMessageService>().Verify(m =>
+                    m.SendMessageAsync(
+                        It.IsAny<OrganizationTransformRejectedMessage>(),
+                        It.IsAny<bool>(),
+                        It.IsAny<bool>()),
+                    Times.Never);
+
+                GetMock<ITelemetryService>().Verify(
+                    t => t.TrackOrganizationTransformDeclined(It.IsAny<User>()),
+                    Times.Never);
+            }
+
+            private UsersController CreateController(string accountToTransform, bool success = true)
+            {
+                // Arrange
+                var configurationService = GetConfigurationService();
+
+                var controller = GetController<UsersController>();
+                var currentUser = new User("OrgAdmin") { EmailAddress = "orgadmin@example.com" };
+                controller.SetCurrentUser(currentUser);
+
+                GetMock<IUserService>()
+                    .Setup(u => u.FindByUsername(accountToTransform, false))
+                    .Returns(new User(accountToTransform)
+                    {
+                        EmailAddress = $"{accountToTransform}@example.com"
+                    });
+
+                GetMock<IUserService>()
+                    .Setup(s => s.RejectTransformUserToOrganizationRequest(It.IsAny<User>(), It.IsAny<User>(), It.IsAny<string>()))
+                    .Returns(Task.FromResult(success));
+
+                return controller;
+            }
+        }
+
 
         public class TheRejectTransformToOrganizationAction : TestContainer
         {
@@ -2884,6 +3135,59 @@ namespace NuGetGallery
                 return controller;
             }
         }
+
+        public class TheCancelTransformToOrganizationRedirectAction : TestContainer
+        {
+            [Fact]
+            public async Task RedirectsAndDoesNotPerformWriteOperation()
+            {
+                // Arrange
+                var controller = CreateController();
+
+                // Act
+                var result = await controller.CancelTransformToOrganizationRedirect("token");
+
+                // Assert
+                ResultAssert.IsRedirectTo(result, "/account/Organizations");
+
+                GetMock<IMessageService>().Verify(m =>
+                    m.SendMessageAsync(
+                        It.IsAny<OrganizationTransformRejectedMessage>(),
+                        It.IsAny<bool>(),
+                        It.IsAny<bool>()),
+                    Times.Never);
+
+                GetMock<ITelemetryService>().Verify(
+                    t => t.TrackOrganizationTransformCancelled(It.IsAny<User>()),
+                    Times.Never);
+            }
+
+            private UsersController CreateController(bool success = true)
+            {
+                // Arrange
+                var configurationService = GetConfigurationService();
+
+                var controller = GetController<UsersController>();
+                var admin = new User("OrgToBe") { EmailAddress = "org@example.com" };
+                var currentUser = new User("OrgToBe")
+                {
+                    EmailAddress = "orgToBe@example.com",
+                    OrganizationMigrationRequest = new OrganizationMigrationRequest
+                    {
+                        AdminUser = admin,
+                        ConfirmationToken = "token"
+                    }
+                };
+                controller.SetCurrentUser(currentUser);
+
+                GetMock<IUserService>()
+                    .Setup(s => s.CancelTransformUserToOrganizationRequest(It.IsAny<User>(), It.IsAny<string>()))
+                    .Returns(Task.FromResult(success));
+
+                return controller;
+            }
+        }
+
 
         public class TheCancelTransformToOrganizationAction : TestContainer
         {
@@ -3399,6 +3703,52 @@ namespace NuGetGallery
                 Assert.Equal(userName, model.AccountName);
                 Assert.Single(model.Packages);
                 Assert.Equal(withPendingIssues, model.HasPendingRequests);
+            }
+        }
+
+        public class ThePackagesAction : TestContainer
+        {
+            [Fact]
+            public void UsesProperIconUrl()
+            {
+                string userName = "RegularUser";
+                var controller = GetController<UsersController>();
+                var fakes = Get<Fakes>();
+                var testUser = fakes.CreateUser(userName);
+                testUser.IsDeleted = false;
+                testUser.Key = 1;
+                controller.SetCurrentUser(testUser);
+
+                var packageRegistration = new PackageRegistration();
+                packageRegistration.Owners.Add(testUser);
+
+                var userPackage = new Package()
+                {
+                    Description = "TestPackage",
+                    Key = 1,
+                    Version = "1.0.0",
+                    PackageRegistration = packageRegistration,
+                };
+                packageRegistration.Packages.Add(userPackage);
+
+                var userPackages = new List<Package>() { userPackage };
+
+                const string iconUrl = "https://some.test/icon";
+                GetMock<IIconUrlProvider>()
+                    .Setup(iup => iup.GetIconUrlString(It.IsAny<Package>()))
+                    .Returns(iconUrl);
+                GetMock<IUserService>()
+                    .Setup(stub => stub.FindByUsername(userName, false))
+                    .Returns(testUser);
+                GetMock<IPackageService>()
+                    .Setup(stub => stub.FindPackagesByAnyMatchingOwner(testUser, It.IsAny<bool>(), false))
+                    .Returns(userPackages);
+
+                var model = ResultAssert.IsView<ManagePackagesViewModel>(controller.Packages());
+
+                GetMock<IIconUrlProvider>()
+                    .Verify(iup => iup.GetIconUrlString(userPackage), Times.AtLeastOnce);
+                Assert.Equal(iconUrl, model.ListedPackages.Single().IconUrl);
             }
         }
     }

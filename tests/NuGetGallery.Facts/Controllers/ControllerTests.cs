@@ -9,11 +9,19 @@ using System.Runtime.CompilerServices;
 using System.Web.Mvc;
 using NuGetGallery.Filters;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace NuGetGallery.Controllers
 {
     public class ControllerTests
     {
+        private readonly ITestOutputHelper _output;
+
+        public ControllerTests(ITestOutputHelper output)
+        {
+            _output = output;
+        }
+
         private class ControllerActionRuleException : IEquatable<ControllerActionRuleException>
         {
             public Type Controller { get; private set; }
@@ -65,8 +73,7 @@ namespace NuGetGallery.Controllers
                 new ControllerActionRuleException(typeof(ApiController), nameof(ApiController.CreatePackageVerificationKeyAsync)),
                 new ControllerActionRuleException(typeof(ApiController), nameof(ApiController.DeletePackage)),
                 new ControllerActionRuleException(typeof(ApiController), nameof(ApiController.PublishPackage)),
-                new ControllerActionRuleException(typeof(AuthenticationController), nameof(AuthenticationController.AuthenticateAndLinkExternal)),
-                new ControllerActionRuleException(typeof(AuthenticationController), nameof(AuthenticationController.ChallengeAuthentication))
+                new ControllerActionRuleException(typeof(ApiController), nameof(ApiController.DeprecatePackage)),
             };
 
             // Act
@@ -77,15 +84,35 @@ namespace NuGetGallery.Controllers
                 .Where(m =>
                 {
                     var attributes = m.GetCustomAttributes()
-                        .Where(a => typeof(ActionMethodSelectorAttribute).IsAssignableFrom(a.GetType()));
+                        .Where(a => typeof(ActionMethodSelectorAttribute)
+                        .IsAssignableFrom(a.GetType()));
 
-                    return !(attributes
+                    // Non-actions cannot be requested via HTTP.
+                    if (attributes.Any(a => a.GetType() == typeof(NonActionAttribute)))
+                    {
+                        _output.WriteLine($"{DisplayMethodName(m)} - non-action");
+                        return false;
+                    }
+
+                    var isGetOrHead = attributes
                         .All(a =>
                             a.GetType() == typeof(HttpGetAttribute) ||
                             a.GetType() == typeof(HttpHeadAttribute) ||
                             (a.GetType() == typeof(AcceptVerbsAttribute) &&
                                 (a as AcceptVerbsAttribute).Verbs.All(v =>
-                                    verbExceptions.Any(ve => v.Equals(ve.ToString(), StringComparison.InvariantCultureIgnoreCase))))));
+                                    verbExceptions.Any(ve => v.Equals(ve.ToString(), StringComparison.InvariantCultureIgnoreCase)))));
+
+                    if (isGetOrHead)
+                    {
+                        _output.WriteLine($"{DisplayMethodName(m)} - GET or HEAD");
+                    }
+
+                    return !isGetOrHead;
+                })
+                .Select(m =>
+                {
+                    _output.WriteLine($"{DisplayMethodName(m)} - to be verified");
+                    return m;
                 });
 
             // Assert
@@ -108,8 +135,11 @@ namespace NuGetGallery.Controllers
                 new ControllerActionRuleException(typeof(AccountsController<,>), nameof(UsersController.ConfirmationRequiredPost)),
                 new ControllerActionRuleException(typeof(UsersController), nameof(UsersController.Thanks)),
                 new ControllerActionRuleException(typeof(UsersController), nameof(UsersController.TransformToOrganization)),
+                new ControllerActionRuleException(typeof(UsersController), nameof(UsersController.ConfirmTransformToOrganizationRedirect)),
                 new ControllerActionRuleException(typeof(UsersController), nameof(UsersController.ConfirmTransformToOrganization)),
+                new ControllerActionRuleException(typeof(UsersController), nameof(UsersController.RejectTransformToOrganizationRedirect)),
                 new ControllerActionRuleException(typeof(UsersController), nameof(UsersController.RejectTransformToOrganization)),
+                new ControllerActionRuleException(typeof(UsersController), nameof(UsersController.CancelTransformToOrganizationRedirect)),
                 new ControllerActionRuleException(typeof(UsersController), nameof(UsersController.CancelTransformToOrganization)),
             };
 
@@ -132,27 +162,39 @@ namespace NuGetGallery.Controllers
                 .Select(m => new ControllerActionRuleException(m))
                 .Distinct();
 
-            Assert.Equal(expectedActionsSupportingDiscontinuedLogins.Count(), actionsSupportingDiscontinuedLogins.Count());
-
-            Assert.Empty(actionsSupportingDiscontinuedLogins
-                .Except(expectedActionsSupportingDiscontinuedLogins));
+            Assert.Empty(actionsSupportingDiscontinuedLogins.Except(expectedActionsSupportingDiscontinuedLogins));
+            Assert.Empty(expectedActionsSupportingDiscontinuedLogins.Except(actionsSupportingDiscontinuedLogins));
         }
 
         private IEnumerable<MethodInfo> GetAllActions(IEnumerable<ControllerActionRuleException> exceptions = null)
         {
-            return Assembly.GetAssembly(typeof(AppController)).GetTypes()
+            return Assembly.GetAssembly(typeof(AppController))
+                .GetTypes()
                 // Get all types that are controllers.
                 .Where(typeof(Controller).IsAssignableFrom)
                 // Get all public methods of those types.
                 .SelectMany(t => t.GetMethods(BindingFlags.Instance | BindingFlags.DeclaredOnly | BindingFlags.Public))
                 // Filter out compiler generated methods.
                 .Where(m => !m.GetCustomAttributes(typeof(CompilerGeneratedAttribute), inherit: true).Any())
+                .OrderBy(DisplayMethodName)
                 // Filter out exceptions.
                 .Where(m =>
                 {
                     var possibleException = new ControllerActionRuleException(m);
-                    return !exceptions?.Any(a => a.Equals(possibleException)) ?? true;
+                    var isNotException = !exceptions?.Any(a => a.Equals(possibleException)) ?? true;
+
+                    if (!isNotException)
+                    {
+                        _output.WriteLine($"{DisplayMethodName(m)} - excluded due to exception");
+                    }
+
+                    return isNotException;
                 });
+        }
+
+        private static string DisplayMethodName(MethodInfo m)
+        {
+            return $"{m.DeclaringType.FullName}.{m.Name}";
         }
     }
 }

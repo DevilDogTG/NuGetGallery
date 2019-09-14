@@ -29,7 +29,7 @@ namespace NuGetGallery
 
                 // Assert
                 Assert.Equal(2, _data.Count);
-                Assert.NotEqual(_data[0].ValidationTrackingId, _data[1].ValidationTrackingId);
+                Assert.NotEqual(_data[0].ProcessValidationSet.ValidationTrackingId, _data[1].ProcessValidationSet.ValidationTrackingId);
             }
 
             [Fact]
@@ -43,12 +43,12 @@ namespace NuGetGallery
 
                 // Assert
                 _enqueuer.Verify(
-                    x => x.StartValidationAsync(It.IsAny<PackageValidationMessageData>(), It.IsAny<DateTimeOffset>()),
+                    x => x.SendMessageAsync(It.IsAny<PackageValidationMessageData>(), It.IsAny<DateTimeOffset>()),
                     Times.Once);
                 Assert.Equal(1, _data.Count);
                 Assert.NotNull(_data[0]);
-                Assert.Equal(package.PackageRegistration.Id, _data[0].PackageId);
-                Assert.Equal(package.Version, _data[0].PackageVersion);
+                Assert.Equal(package.PackageRegistration.Id, _data[0].ProcessValidationSet.PackageId);
+                Assert.Equal(package.Version, _data[0].ProcessValidationSet.PackageVersion);
             }
 
             [Theory]
@@ -65,13 +65,13 @@ namespace NuGetGallery
 
                 // Assert
                 _enqueuer.Verify(
-                    x => x.StartValidationAsync(It.IsAny<PackageValidationMessageData>(), It.IsAny<DateTimeOffset>()),
+                    x => x.SendMessageAsync(It.IsAny<PackageValidationMessageData>(), It.IsAny<DateTimeOffset>()),
                     Times.Once);
                 Assert.Equal(1, _data.Count);
                 Assert.NotNull(_data[0]);
-                Assert.Equal(package.PackageRegistration.Id, _data[0].PackageId);
-                Assert.Equal(package.Version, _data[0].PackageVersion);
-                Assert.Equal(expectedEntityKey, _data[0].EntityKey);
+                Assert.Equal(package.PackageRegistration.Id, _data[0].ProcessValidationSet.PackageId);
+                Assert.Equal(package.Version, _data[0].ProcessValidationSet.PackageVersion);
+                Assert.Equal(expectedEntityKey, _data[0].ProcessValidationSet.EntityKey);
             }
 
             [Fact]
@@ -88,7 +88,7 @@ namespace NuGetGallery
                     () => _target.StartValidationAsync(package));
                 Assert.Equal(Strings.CannotEnqueueDueToReadOnly, exception.Message);
                 _enqueuer.Verify(
-                    x => x.StartValidationAsync(It.IsAny<PackageValidationMessageData>()),
+                    x => x.SendMessageAsync(It.IsAny<PackageValidationMessageData>()),
                     Times.Never);
             }
 
@@ -152,7 +152,9 @@ namespace NuGetGallery
 
                 // Assert
                 Assert.Equal(2, _data.Count);
-                Assert.NotEqual(_data[0].ValidationTrackingId, _data[1].ValidationTrackingId);
+                Assert.NotEqual(
+                    _data[0].ProcessValidationSet.ValidationTrackingId,
+                    _data[1].ProcessValidationSet.ValidationTrackingId);
             }
 
             [Fact]
@@ -166,12 +168,12 @@ namespace NuGetGallery
 
                 // Assert
                 _enqueuer.Verify(
-                    x => x.StartValidationAsync(It.IsAny<PackageValidationMessageData>(), It.IsAny<DateTimeOffset>()),
+                    x => x.SendMessageAsync(It.IsAny<PackageValidationMessageData>(), It.IsAny<DateTimeOffset>()),
                     Times.Once);
                 Assert.Equal(1, _data.Count);
                 Assert.NotNull(_data[0]);
-                Assert.Equal(symbolPackage.Package.PackageRegistration.Id, _data[0].PackageId);
-                Assert.Equal(symbolPackage.Package.Version, _data[0].PackageVersion);
+                Assert.Equal(symbolPackage.Package.PackageRegistration.Id, _data[0].ProcessValidationSet.PackageId);
+                Assert.Equal(symbolPackage.Package.Version, _data[0].ProcessValidationSet.PackageVersion);
             }
 
             [Theory]
@@ -188,13 +190,13 @@ namespace NuGetGallery
 
                 // Assert
                 _enqueuer.Verify(
-                    x => x.StartValidationAsync(It.IsAny<PackageValidationMessageData>(), It.IsAny<DateTimeOffset>()),
+                    x => x.SendMessageAsync(It.IsAny<PackageValidationMessageData>(), It.IsAny<DateTimeOffset>()),
                     Times.Once);
                 Assert.Equal(1, _data.Count);
                 Assert.NotNull(_data[0]);
-                Assert.Equal(symbolPackage.Package.PackageRegistration.Id, _data[0].PackageId);
-                Assert.Equal(symbolPackage.Package.Version, _data[0].PackageVersion);
-                Assert.Equal(expectedEntityKey, _data[0].EntityKey);
+                Assert.Equal(symbolPackage.Package.PackageRegistration.Id, _data[0].ProcessValidationSet.PackageId);
+                Assert.Equal(symbolPackage.Package.Version, _data[0].ProcessValidationSet.PackageVersion);
+                Assert.Equal(expectedEntityKey, _data[0].ProcessValidationSet.EntityKey);
             }
 
             [Fact]
@@ -211,7 +213,7 @@ namespace NuGetGallery
                     () => _target.StartValidationAsync(symbolPackage));
                 Assert.Equal(Strings.CannotEnqueueDueToReadOnly, exception.Message);
                 _enqueuer.Verify(
-                    x => x.StartValidationAsync(It.IsAny<PackageValidationMessageData>()),
+                    x => x.SendMessageAsync(It.IsAny<PackageValidationMessageData>()),
                     Times.Never);
             }
 
@@ -278,7 +280,7 @@ namespace NuGetGallery
             {
                 _enqueuer = new Mock<IPackageValidationEnqueuer>();
                 _enqueuer
-                    .Setup(x => x.StartValidationAsync(It.IsAny<PackageValidationMessageData>(), It.IsAny<DateTimeOffset>()))
+                    .Setup(x => x.SendMessageAsync(It.IsAny<PackageValidationMessageData>(), It.IsAny<DateTimeOffset>()))
                     .Returns(Task.CompletedTask)
                     .Callback<PackageValidationMessageData, DateTimeOffset>((d, o) => _data.Add(d));
 

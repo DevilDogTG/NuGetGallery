@@ -10,7 +10,9 @@ namespace NuGetGallery
         public const string AddOrganization = "AddOrganization";
         public const string OrganizationMemberAddAjax = "AddMember";
         public const string OrganizationMemberAdd = "AddMemberJson";
+        public const string OrganizationMemberConfirmRedirect = "ConfirmMemberRequestRedirect";
         public const string OrganizationMemberConfirm = "ConfirmMemberRequest";
+        public const string OrganizationMemberRejectRedirect = "RejectMemberRequestRedirect";
         public const string OrganizationMemberReject = "RejectMemberRequest";
         public const string OrganizationMemberCancelAjax = "CancelMemberRequest";
         public const string OrganizationMemberCancel = "CancelMemberRequestJson";
@@ -20,8 +22,11 @@ namespace NuGetGallery
         public const string OrganizationMemberDelete = "DeleteMemberJson";
         public const string ChangeOrganizationEmailSubscription = "ChangeOrganizationEmailSubscription";
         public const string TransformToOrganization = "TransformToOrganization";
+        public const string TransformToOrganizationConfirmationRedirect = "ConfirmTransformRedirect";
         public const string TransformToOrganizationConfirmation = "ConfirmTransform";
+        public const string TransformToOrganizationRejectionRedirect = "RejectTransformRedirect";
         public const string TransformToOrganizationRejection = "RejectTransform";
+        public const string TransformToOrganizationCancellationRedirect = "CancelTransformRedirect";
         public const string TransformToOrganizationCancellation = "CancelTransform";
         public const string ApiKeys = "ApiKeys";
         public const string Profile = "Profile";
@@ -38,15 +43,16 @@ namespace NuGetGallery
         public const string UploadPackage = "UploadPackage";
         public const string UploadPackageProgress = "UploadPackageProgress";
         public const string PackageVersionAction = "PackageVersionAction";
-        public const string ConfirmPendingOwnershipRequest = "ConfirmPendingOwnershipRequest";
+        public const string PackageOwnerConfirmationRedirect = "PackageOwnerConfirmationRedirect";
         public const string PackageOwnerConfirmation = "PackageOwnerConfirmation";
-        public const string RejectPendingOwnershipRequest = "RejectPendingOwnershipRequest";
+        public const string PackageOwnerRejectionRedirect = "PackageOwnerRejectionRedirect";
         public const string PackageOwnerRejection = "PackageOwnerRejection";
         public const string PackageOwnerCancellation = "PackageOwnerCancellation";
         public const string PackageAction = "PackageAction";
         public const string PackageDeleteAction = "PackageDeleteAction";
         public const string PushPackageApi = "PushPackageApi";
         public const string PublishPackageApi = "PublishPackageApi";
+        public const string DeprecatePackageApi = "DeprecatePackageApi";
         public const string DeletePackageApi = "DeletePackageApi";
         public const string PushSymbolPackageApi = "PushSymbolPackageApi";
         public const string PasswordReset = "PasswordReset";
@@ -106,5 +112,8 @@ namespace NuGetGallery
         public const string PagesSimulateError = "PagesSimulateError";
         public const string ApiSimulateError = "ApiSimulateError";
         public const string ExperimentsSearchSideBySide = "ExperimentsSearchSideBySide";
+        public const string PackageReflowAction = "PackageReflowAction";
+        public const string PackageRevalidateAction = "PackageRevalidateAction";
+        public const string PackageRevalidateSymbolsAction = "PackageRevalidateSymbolsAction";
     }
 }

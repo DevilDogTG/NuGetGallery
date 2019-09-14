@@ -243,6 +243,13 @@ namespace NuGetGallery.Configuration
         string EnforcedAuthProviderForAdmin { get; set; }
 
         /// <summary>
+        /// Gets a string indicating which AAD Tenant Id should be used for administrators. 
+        /// When specified, the gallery will ensure admin users are logging in using only the specified tenant ID.
+        /// Blank means any AAD tenant ID can be used by administrators.
+        /// </summary>
+        string EnforcedTenantIdForAdmin { get; set; }
+
+        /// <summary>
         /// The required format for a user password.
         /// </summary>
         string UserPasswordRegex { get; set; }
@@ -371,6 +378,16 @@ namespace NuGetGallery.Configuration
         bool AsynchronousEmailServiceEnabled { get; set; }
 
         /// <summary>
+        /// Gets or sets a flag indicating whether asynchronous account deletion service is enabled.
+        /// </summary>
+        bool AsynchronousDeleteAccountServiceEnabled { get; set; }
+
+        /// <summary>
+        /// Gets or sets a flag indicating if this gallery allows users to delete their own account.
+        /// </summary>
+        bool SelfServiceAccountDeleteEnabled { get; set; }
+
+        /// <summary>
         /// Indicates whether packages that specify the license the "old" way (with a "licenseUrl" node only) should be rejected.
         /// </summary>
         bool BlockLegacyLicenseUrl { get; set; }
@@ -425,5 +442,12 @@ namespace NuGetGallery.Configuration
         /// The Search timeout per request in milliseconds.
         /// </summary>
         int SearchHttpRequestTimeoutInMilliseconds { get; set; }
+
+        /// <summary>
+        /// Template for the storage URL for packages with embedded icons.
+        /// When expanded the '{id-lower}' will be replaced with the package id in lowercase,
+        /// '{version-lower}' will be replaced with the normalized package version in lowercase.
+        /// </summary>
+        string EmbeddedIconUrlTemplate { get; set; }
     }
 }

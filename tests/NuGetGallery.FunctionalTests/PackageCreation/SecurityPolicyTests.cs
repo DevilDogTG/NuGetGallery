@@ -36,7 +36,7 @@ namespace NuGetGallery.FunctionalTests.PackageCreation
         public async Task PackagePush_Returns400IfMinClientVersionPolicyNotMet(string clientVersion)
         {
             // Arrange
-            var id = $"{nameof(PackagePush_Returns400IfMinClientVersionPolicyNotMet)}.{DateTime.UtcNow.Ticks}";
+            var id = $"ValidClientVersion{Guid.NewGuid():N}";
 
             // Act
             var response = await PushPackageAsync(GalleryConfiguration.Instance.Account.ApiKey, id, clientVersion);
@@ -54,7 +54,7 @@ namespace NuGetGallery.FunctionalTests.PackageCreation
         public async Task PackagePush_Returns200IfMinClientVersionPolicyMet(string clientVersion)
         {
             // Arrange
-            var id = $"{nameof(PackagePush_Returns200IfMinClientVersionPolicyMet)}.{DateTime.UtcNow.Ticks}";
+            var id = $"ClientVersionTooLow{Guid.NewGuid():N}";
 
             // Act
             var response = await PushPackageAsync(GalleryConfiguration.Instance.Account.ApiKey, id, clientVersion);
@@ -70,7 +70,7 @@ namespace NuGetGallery.FunctionalTests.PackageCreation
         public async Task PackagePush_Returns200IfMinProtocolVersionPolicyMet()
         {
             // Arrange
-            var id = $"{nameof(PackagePush_Returns200IfMinProtocolVersionPolicyMet)}.{DateTime.UtcNow.Ticks}";
+            var id = $"ValidProtocolVersion{Guid.NewGuid():N}";
 
             // Act
             var response = await PushPackageAsync(GalleryConfiguration.Instance.Account.ApiKey, id, clientVersion: null, protocolVersion: "4.1.0");
@@ -86,7 +86,7 @@ namespace NuGetGallery.FunctionalTests.PackageCreation
         public async Task VerifyPackageKey_Returns400IfPackageVerifyScopePolicyNotMet()
         {
             // Arrange
-            var id = $"VerifyKeyReturns400IfScopeNotMet.{DateTime.UtcNow.Ticks}";
+            var id = $"InvalidScopeForVerify{Guid.NewGuid():N}";
 
             var pushResponse = await PushPackageAsync(GalleryConfiguration.Instance.Account.ApiKey, id, "4.1.0");
             Assert.Equal(HttpStatusCode.Created, pushResponse.StatusCode);
@@ -105,7 +105,7 @@ namespace NuGetGallery.FunctionalTests.PackageCreation
         public async Task VerifyPackageKey_Returns200IfPackageVerifyScopePolicyMet()
         {
             // Arrange
-            var id = $"{nameof(VerifyPackageKey_Returns200IfPackageVerifyScopePolicyMet)}.{DateTime.UtcNow.Ticks}";
+            var id = $"ValidScopeForVerify{Guid.NewGuid():N}";
 
             var pushResponse = await PushPackageAsync(GalleryConfiguration.Instance.Account.ApiKey, id, "4.1.0");
             Assert.Equal(HttpStatusCode.Created, pushResponse.StatusCode);
@@ -200,23 +200,21 @@ namespace NuGetGallery.FunctionalTests.PackageCreation
                 $"package/create-verification-key/{packageId}" :
                 $"package/create-verification-key/{packageId}/{packageVersion}";
 
-            var request = WebRequest.Create(UrlHelper.V2FeedRootUrl + route);
-            request.Method = "POST";
-            request.ContentLength = 0;
-            request.Headers.Add(Constants.NuGetHeaderApiKey, apiKey);
-            request.Headers.Add(Constants.NuGetHeaderClientVersion, "NuGetGallery.FunctionalTests");
-
             string responseText;
-            using (var response = await request.GetResponseAsync() as HttpWebResponse)
+            using (var request = new HttpRequestMessage(HttpMethod.Post, UrlHelper.V2FeedRootUrl + route))
             {
-                Assert.NotNull(response);
-                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                request.Headers.Add(Constants.NuGetHeaderApiKey, apiKey);
+                request.Headers.Add(Constants.NuGetHeaderClientVersion, "NuGetGallery.FunctionalTests");
 
-                using (var sr = new StreamReader(response.GetResponseStream()))
+                using (var httpClient = new HttpClient())
+                using (var response = await httpClient.SendAsync(request))
                 {
-                    responseText = await sr.ReadToEndAsync();
+                    Assert.NotNull(response);
+                    Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+                    responseText = await response.Content.ReadAsStringAsync();
                 }
-            }                
+            }
 
             var json = JObject.Parse(responseText);
             var expiration = json.Value<DateTime>("Expires");
@@ -233,19 +231,16 @@ namespace NuGetGallery.FunctionalTests.PackageCreation
                 $"verifykey/{packageId}" :
                 $"verifykey/{packageId}/{packageVersion}";
 
-            var request = WebRequest.Create(UrlHelper.V2FeedRootUrl + route);
-            request.Headers.Add(Constants.NuGetHeaderApiKey, apiKey);
-
-            try
+            using (var request = new HttpRequestMessage())
             {
-                using (var response = await request.GetResponseAsync() as HttpWebResponse)
+                request.RequestUri = new Uri(UrlHelper.V2FeedRootUrl + route);
+                request.Headers.Add(Constants.NuGetHeaderApiKey, apiKey);
+
+                using (var httpClient = new HttpClient())
+                using (var response = await httpClient.SendAsync(request))
                 {
                     return response.StatusCode;
                 }
-            }
-            catch (WebException e)
-            {
-                return ((HttpWebResponse)e.Response).StatusCode;
             }
         }
     }

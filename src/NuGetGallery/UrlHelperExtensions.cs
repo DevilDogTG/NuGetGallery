@@ -21,6 +21,19 @@ namespace NuGetGallery
         private static IGalleryConfigurationService _configuration;
         private const string PackageExplorerDeepLink = @"https://npe.codeplex.com/releases/clickonce/NuGetPackageExplorer.application?url={0}&id={1}&version={2}";
 
+        public static class Fragments
+        {
+            public static class ManagePage
+            {
+                public const string ShowOwnersContainer = "#show-Owners-container";
+            }
+
+            public static class ManagePackagesPage
+            {
+                public const string ShowRequestsReceivedContainer = "#show-requests-received-container";
+            }
+        }
+
         // Shorthand for current url
         public static string Current(this UrlHelper url)
         {
@@ -408,30 +421,6 @@ namespace NuGetGallery
                 });
         }
 
-        public static string LogOff(this UrlHelper url, bool relativeUrl = true)
-        {
-            return LogOff(url, url.Current(), relativeUrl);
-        }
-
-        public static string LogOff(this UrlHelper url, string returnUrl, bool relativeUrl = true)
-        {
-            // If we're logging off from the Admin Area, don't set a return url
-            if (string.Equals(url.RequestContext.RouteData.DataTokens[Area].ToStringOrNull(), AdminAreaRegistration.Name, StringComparison.OrdinalIgnoreCase))
-            {
-                returnUrl = string.Empty;
-            }
-
-            return GetActionLink(
-                url,
-                "LogOff",
-                "Authentication",
-                relativeUrl,
-                routeValues: new RouteValueDictionary
-                {
-                    { "returnUrl", returnUrl }
-                });
-        }
-
         public static string Register(this UrlHelper url, bool relativeUrl = true)
         {
             return GetActionLink(url, "LogOn", "Authentication", relativeUrl);
@@ -632,10 +621,29 @@ namespace NuGetGallery
             return new RouteUrlTemplate<User>(linkGenerator, routesGenerator);
         }
 
+        public static RouteUrlTemplate<BasicUserViewModel> BasicUserViewModelTemplate(
+            this UrlHelper url,
+            string scheme = null,
+            bool relativeUrl = true)
+        {
+            var routesGenerator = new Dictionary<string, Func<BasicUserViewModel, object>>
+            {
+                { "username", u => u.Username }
+            };
+
+            Func<RouteValueDictionary, string> linkGenerator = rv => GetActionLink(
+                url,
+                "Profiles",
+                "Users",
+                relativeUrl,
+                routeValues: rv);
+
+            return new RouteUrlTemplate<BasicUserViewModel>(linkGenerator, routesGenerator);
+        }
+
         public static string User(
             this UrlHelper url,
             string username,
-            string scheme = null,
             bool relativeUrl = true)
         {
             return GetActionLink(
@@ -731,6 +739,40 @@ namespace NuGetGallery
             return url.PackageVersionActionTemplate(nameof(PackagesController.Manage), relativeUrl);
         }
 
+        public static string ManagePackageOwnership(
+            this UrlHelper url,
+            string id,
+            bool relativeUrl = true)
+        {
+            return GetRouteLink(
+                url,
+                RouteName.PackageAction,
+                relativeUrl,
+                routeValues: new RouteValueDictionary
+                {
+                    { "action", nameof(PackagesController.Manage) },
+                    { "id", id }
+                }) + Fragments.ManagePage.ShowOwnersContainer;
+        }
+
+        public static RouteUrlTemplate<OwnerRequestsListItemViewModel> ManagePackageOwnershipTemplate(
+            this UrlHelper url, bool relativeUrl = true)
+        {
+            var routesGenerator = new Dictionary<string, Func<OwnerRequestsListItemViewModel, object>>
+            {
+                { "id", r => r.Package.Id },
+            };
+
+            Func<RouteValueDictionary, string> linkGenerator = rv => GetActionLink(
+                url,
+                nameof(PackagesController.Manage),
+                "Packages",
+                relativeUrl,
+                routeValues: rv) + Fragments.ManagePage.ShowOwnersContainer;
+
+            return new RouteUrlTemplate<OwnerRequestsListItemViewModel>(linkGenerator, routesGenerator);
+        }
+
         public static string ManagePackage(
             this UrlHelper url,
             IPackageVersionModel package,
@@ -747,30 +789,6 @@ namespace NuGetGallery
                 url,
                 RouteName.PreviewReadMe,
                 relativeUrl);
-        }
-
-        public static string ReflowPackage(
-            this UrlHelper url,
-            IPackageVersionModel package,
-            bool relativeUrl = true)
-        {
-            return url.PackageVersionAction(nameof(PackagesController.Reflow), package, relativeUrl);
-        }
-
-        public static string RevalidatePackage(
-            this UrlHelper url,
-            IPackageVersionModel package,
-            bool relativeUrl = true)
-        {
-            return url.PackageVersionAction(nameof(PackagesController.Revalidate), package, relativeUrl);
-        }
-
-        public static string RevalidateSymbolsPackage(
-            this UrlHelper url,
-            IPackageVersionModel package,
-            bool relativeUrl = true)
-        {
-            return url.PackageVersionAction(nameof(PackagesController.RevalidateSymbols), package, relativeUrl);
         }
 
         public static string DeprecatePackage(this UrlHelper url, bool relativeUrl = true)
@@ -908,18 +926,27 @@ namespace NuGetGallery
 
         public static string ManageMyApiKeys(this UrlHelper url, bool relativeUrl = true)
         {
-            return GetActionLink(url, "ApiKeys", "Users", relativeUrl);
+            return GetActionLink(
+                url,
+                nameof(UsersController.ApiKeys),
+                "Users",
+                relativeUrl);
         }
 
         public static string ManageMyOrganizations(this UrlHelper url, bool relativeUrl = true)
         {
-            return GetActionLink(url, "Organizations", "Users", relativeUrl);
+            return GetActionLink(
+                url,
+                nameof(UsersController.Organizations),
+                "Users",
+                relativeUrl);
         }
 
         public static string AddOrganization(this UrlHelper url, bool relativeUrl = true)
         {
-            return GetActionLink(url,
-                "Add",
+            return GetActionLink(
+                url,
+                nameof(OrganizationsController.Add),
                 "Organizations",
                 relativeUrl);
         }
@@ -927,7 +954,7 @@ namespace NuGetGallery
         public static string ManageMyOrganization(this UrlHelper url, string accountName, bool relativeUrl = true)
         {
             return GetActionLink(url,
-                "ManageOrganization",
+                nameof(OrganizationsController.ManageOrganization),
                 "Organizations",
                 relativeUrl,
                 routeValues: new RouteValueDictionary
@@ -939,7 +966,7 @@ namespace NuGetGallery
         public static string AddOrganizationMember(this UrlHelper url, string accountName, bool relativeUrl = true)
         {
             return GetActionLink(url,
-                RouteName.OrganizationMemberAddAjax,
+                nameof(OrganizationsController.AddMember),
                 "Organizations",
                 relativeUrl,
                 routeValues: new RouteValueDictionary
@@ -960,18 +987,26 @@ namespace NuGetGallery
 
         public static string AcceptOrganizationMembershipRequest(this UrlHelper url, string organizationUsername, string confirmationToken, bool relativeUrl = true)
         {
-            return url.HandleOrganizationMembershipRequest("ConfirmMemberRequest", organizationUsername, confirmationToken, relativeUrl);
+            return url.HandleOrganizationMembershipRequest(
+                nameof(OrganizationsController.ConfirmMemberRequest),
+                organizationUsername,
+                confirmationToken,
+                relativeUrl);
         }
 
         public static string RejectOrganizationMembershipRequest(this UrlHelper url, string organizationUsername, string confirmationToken, bool relativeUrl = true)
         {
-            return url.HandleOrganizationMembershipRequest("RejectMemberRequest", organizationUsername, confirmationToken, relativeUrl);
+            return url.HandleOrganizationMembershipRequest(
+                nameof(OrganizationsController.RejectMemberRequest),
+                organizationUsername,
+                confirmationToken,
+                relativeUrl);
         }
 
-        private static string HandleOrganizationMembershipRequest(this UrlHelper url, string routeName, string organizationUsername, string confirmationToken, bool relativeUrl = true)
+        private static string HandleOrganizationMembershipRequest(this UrlHelper url, string actionName, string organizationUsername, string confirmationToken, bool relativeUrl = true)
         {
             return GetActionLink(url,
-                routeName,
+                actionName,
                 "Organizations",
                 relativeUrl,
                 routeValues: new RouteValueDictionary
@@ -984,7 +1019,7 @@ namespace NuGetGallery
         public static string CancelOrganizationMembershipRequest(this UrlHelper url, string accountName, bool relativeUrl = true)
         {
             return GetActionLink(url,
-                "CancelMemberRequest",
+                nameof(OrganizationsController.CancelMemberRequest),
                 "Organizations",
                 relativeUrl,
                 routeValues: new RouteValueDictionary
@@ -996,7 +1031,7 @@ namespace NuGetGallery
         public static string UpdateOrganizationMember(this UrlHelper url, string accountName, bool relativeUrl = true)
         {
             return GetActionLink(url,
-                "UpdateMember",
+                nameof(OrganizationsController.UpdateMember),
                 "Organizations",
                 relativeUrl,
                 routeValues: new RouteValueDictionary
@@ -1008,7 +1043,7 @@ namespace NuGetGallery
         public static string DeleteOrganizationMember(this UrlHelper url, string accountName, bool relativeUrl = true)
         {
             return GetActionLink(url,
-                "DeleteMember",
+                nameof(OrganizationsController.DeleteMember),
                 "Organizations",
                 relativeUrl,
                 routeValues: new RouteValueDictionary
@@ -1020,7 +1055,7 @@ namespace NuGetGallery
         public static string DeleteOrganization(this UrlHelper url, string accountName, bool relativeUrl = true)
         {
             return GetActionLink(url,
-                "DeleteRequest",
+                nameof(OrganizationsController.DeleteRequest),
                 "Organizations",
                 relativeUrl,
                 routeValues: new RouteValueDictionary
@@ -1032,6 +1067,11 @@ namespace NuGetGallery
         public static string ManageMyPackages(this UrlHelper url, bool relativeUrl = true)
         {
             return GetActionLink(url, "Packages", "Users", relativeUrl);
+        }
+
+        public static string ManageMyReceivedPackageOwnershipRequests(this UrlHelper url, bool relativeUrl = true)
+        {
+            return url.ManageMyPackages(relativeUrl) + Fragments.ManagePackagesPage.ShowRequestsReceivedContainer;
         }
 
         public static string GetPackageOwners(this UrlHelper url, bool relativeUrl = true)
@@ -1094,9 +1134,13 @@ namespace NuGetGallery
         }
 
         public static RouteUrlTemplate<OwnerRequestsListItemViewModel> ConfirmPendingOwnershipRequestTemplate(
-            this UrlHelper url, bool relativeUrl = true)
+            this UrlHelper url,
+            bool relativeUrl = true)
         {
-            return HandlePendingOwnershipRequestTemplate(url, RouteName.ConfirmPendingOwnershipRequest, relativeUrl);
+            return HandlePendingOwnershipRequestTemplate(
+                url,
+                nameof(PackagesController.ConfirmPendingOwnershipRequest),
+                relativeUrl);
         }
 
         public static string ConfirmPendingOwnershipRequest(
@@ -1106,13 +1150,23 @@ namespace NuGetGallery
             string confirmationCode,
             bool relativeUrl = true)
         {
-            return HandlePendingOwnershipRequest(url, RouteName.ConfirmPendingOwnershipRequest, packageId, username, confirmationCode, relativeUrl);
+            return HandlePendingOwnershipRequest(
+                url,
+                nameof(PackagesController.ConfirmPendingOwnershipRequestRedirect),
+                packageId,
+                username,
+                confirmationCode,
+                relativeUrl);
         }
 
         public static RouteUrlTemplate<OwnerRequestsListItemViewModel> RejectPendingOwnershipRequestTemplate(
-            this UrlHelper url, bool relativeUrl = true)
+            this UrlHelper url,
+            bool relativeUrl = true)
         {
-            return HandlePendingOwnershipRequestTemplate(url, RouteName.RejectPendingOwnershipRequest, relativeUrl);
+            return HandlePendingOwnershipRequestTemplate(
+                url,
+                nameof(PackagesController.RejectPendingOwnershipRequest),
+                relativeUrl);
         }
 
         public static string RejectPendingOwnershipRequest(
@@ -1122,12 +1176,18 @@ namespace NuGetGallery
             string confirmationCode,
             bool relativeUrl = true)
         {
-            return HandlePendingOwnershipRequest(url, RouteName.RejectPendingOwnershipRequest, packageId, username, confirmationCode, relativeUrl);
+            return HandlePendingOwnershipRequest(
+                url,
+                nameof(PackagesController.RejectPendingOwnershipRequestRedirect),
+                packageId,
+                username,
+                confirmationCode,
+                relativeUrl);
         }
 
         private static RouteUrlTemplate<OwnerRequestsListItemViewModel> HandlePendingOwnershipRequestTemplate(
             this UrlHelper url,
-            string routeName,
+            string actionName,
             bool relativeUrl = true)
         {
             var routesGenerator = new Dictionary<string, Func<OwnerRequestsListItemViewModel, object>>
@@ -1139,7 +1199,7 @@ namespace NuGetGallery
 
             Func<RouteValueDictionary, string> linkGenerator = rv => GetActionLink(
                 url,
-                routeName,
+                actionName,
                 "Packages",
                 relativeUrl,
                 routeValues: rv);
@@ -1149,7 +1209,7 @@ namespace NuGetGallery
 
         private static string HandlePendingOwnershipRequest(
             this UrlHelper url,
-            string routeName,
+            string actionName,
             string packageId,
             string username,
             string confirmationCode,
@@ -1162,44 +1222,7 @@ namespace NuGetGallery
                 ["token"] = confirmationCode
             };
 
-            return GetActionLink(url, routeName, "Packages", relativeUrl, routeValues);
-        }
-
-        public static RouteUrlTemplate<OwnerRequestsListItemViewModel> CancelPendingOwnershipRequestTemplate(
-            this UrlHelper url, bool relativeUrl = true)
-        {
-            var routesGenerator = new Dictionary<string, Func<OwnerRequestsListItemViewModel, object>>
-            {
-                { "id", r => r.Package.Id },
-                { "requestingUsername", r => r.Request.RequestingOwner.Username },
-                { "pendingUsername", r => r.Request.NewOwner.Username }
-            };
-
-            Func<RouteValueDictionary, string> linkGenerator = rv => GetActionLink(
-                url,
-                "CancelPendingOwnershipRequest",
-                "Packages",
-                relativeUrl,
-                routeValues: rv);
-
-            return new RouteUrlTemplate<OwnerRequestsListItemViewModel>(linkGenerator, routesGenerator);
-        }
-
-        public static string CancelPendingOwnershipRequest(
-            this UrlHelper url,
-            string packageId,
-            string requestingUsername,
-            string pendingUsername,
-            bool relativeUrl = true)
-        {
-            var routeValues = new RouteValueDictionary
-            {
-                ["id"] = packageId,
-                ["requestingUsername"] = requestingUsername,
-                ["pendingUsername"] = pendingUsername
-            };
-
-            return GetActionLink(url, "CancelPendingOwnershipRequest", "Packages", relativeUrl, routeValues);
+            return GetActionLink(url, actionName, "Packages", relativeUrl, routeValues);
         }
 
         public static string ConfirmEmail(
@@ -1356,39 +1379,61 @@ namespace NuGetGallery
 
         public static string TransformAccount(this UrlHelper url, bool relativeUrl = true)
         {
-            return GetActionLink(url, RouteName.TransformToOrganization, "Users", relativeUrl);
+            return GetActionLink(
+                url,
+                nameof(UsersController.TransformToOrganization),
+                "Users",
+                relativeUrl);
         }
 
         public static string ConfirmTransformAccount(this UrlHelper url, User accountToTransform, bool relativeUrl = true)
         {
-            return url.HandleTransformAccount(RouteName.TransformToOrganizationConfirmation, accountToTransform, relativeUrl);
+            return url.HandleTransformAccount(
+                nameof(UsersController.ConfirmTransformToOrganization),
+                accountToTransform,
+                relativeUrl);
         }
 
         public static string RejectTransformAccount(this UrlHelper url, User accountToTransform, bool relativeUrl = true)
         {
-            return url.HandleTransformAccount(RouteName.TransformToOrganizationRejection, accountToTransform, relativeUrl);
+            return url.HandleTransformAccount(
+                nameof(UsersController.RejectTransformToOrganization),
+                accountToTransform,
+                relativeUrl);
         }
 
-        private static string HandleTransformAccount(this UrlHelper url, string routeName, User accountToTransform, bool relativeUrl = true)
+        private static string HandleTransformAccount(this UrlHelper url, string action, User accountToTransform, bool relativeUrl = true)
         {
-            return url.HandleTransformAccount(routeName, accountToTransform.Username, accountToTransform.OrganizationMigrationRequest.ConfirmationToken, relativeUrl);
+            return url.HandleTransformAccount(
+                action,
+                accountToTransform.Username,
+                accountToTransform.OrganizationMigrationRequest.ConfirmationToken,
+                relativeUrl);
         }
 
         public static string ConfirmTransformAccount(this UrlHelper url, string accountToTransformUsername, string confirmationToken, bool relativeUrl = true)
         {
-            return url.HandleTransformAccount(RouteName.TransformToOrganizationConfirmation, accountToTransformUsername, confirmationToken, relativeUrl);
+            return url.HandleTransformAccount(
+                nameof(UsersController.ConfirmTransformToOrganization),
+                accountToTransformUsername,
+                confirmationToken,
+                relativeUrl);
         }
 
         public static string RejectTransformAccount(this UrlHelper url, string accountToTransformUsername, string confirmationToken, bool relativeUrl = true)
         {
-            return url.HandleTransformAccount("RejectTransform", accountToTransformUsername, confirmationToken, relativeUrl);
+            return url.HandleTransformAccount(
+                nameof(UsersController.RejectTransformToOrganization),
+                accountToTransformUsername,
+                confirmationToken,
+                relativeUrl);
         }
 
-        private static string HandleTransformAccount(this UrlHelper url, string routeName, string accountToTransformUsername, string confirmationToken, bool relativeUrl = true)
+        private static string HandleTransformAccount(this UrlHelper url, string action, string accountToTransformUsername, string confirmationToken, bool relativeUrl = true)
         {
             return GetActionLink(
                 url,
-                routeName,
+                action,
                 "Users",
                 relativeUrl,
                 routeValues: new RouteValueDictionary
@@ -1400,14 +1445,21 @@ namespace NuGetGallery
 
         public static string CancelTransformAccount(this UrlHelper url, User accountToTransform, bool relativeUrl = true)
         {
+            return url.CancelTransformAccount(
+                accountToTransform.OrganizationMigrationRequest.ConfirmationToken,
+                relativeUrl);
+        }
+
+        public static string CancelTransformAccount(this UrlHelper url, string confirmationToken, bool relativeUrl = true)
+        {
             return GetActionLink(
                 url,
-                RouteName.TransformToOrganizationCancellation,
+                nameof(UsersController.CancelTransformToOrganization),
                 "Users",
                 relativeUrl,
                 routeValues: new RouteValueDictionary
                 {
-                    { "token", accountToTransform.OrganizationMigrationRequest.ConfirmationToken }
+                    { "token", confirmationToken }
                 });
         }
 
